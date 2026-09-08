@@ -46,9 +46,14 @@ class SlackAdapter(BaseAdapter):
     provider = "slack"
 
     def capabilities(self) -> Tuple[Capability, ...]:
+        # ``approval.request`` is the approval leg of the Integration Plane demo — it posts
+        # the thing to be approved as a message a human then acts on (Tier-3 write, same as
+        # a send). Block Kit approve/reject buttons are a later enhancement (needs
+        # interactivity wiring); v1 posts the prompt.
         return (
             Capability("chat.message.send", tier=3, write=True),
             Capability("chat.message.read", tier=1, write=False),
+            Capability("approval.request", tier=3, write=True),
             Capability("identity.read", tier=1, write=False),
         )
 
@@ -72,8 +77,11 @@ class SlackAdapter(BaseAdapter):
     # ── execute ───────────────────────────────────────────────────────────────
     def _do_execute(self, capability: Capability, request: Dict[str, Any],
                     envelope: Optional[object]) -> ProviderResult:
-        if capability.name == "chat.message.send":
-            channel, text = request.get("channel", ""), request.get("text", "")
+        if capability.name in ("chat.message.send", "approval.request"):
+            channel = request.get("channel", "")
+            # approval.request carries the thing to be approved as `prompt` (or `text`);
+            # both post a message — the approval is the message a human then acts on.
+            text = request.get("text") or request.get("prompt", "")
             status, data, err = self._post("chat.postMessage", {"channel": channel, "text": text})
             if err:
                 return ProviderResult(ok=False, capability=capability.name, error=err, retryable=True)
