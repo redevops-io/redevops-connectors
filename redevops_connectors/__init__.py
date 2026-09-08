@@ -29,6 +29,17 @@ from .credentials import CredentialRef, InMemorySecretResolver, SecretResolver, 
 from .oauth import OAuth2Config, OAuthFlow, TokenGrant
 from .transport import FakeTransport, Response, Transport, UrllibTransport
 from .conformance import Check, ConformanceReport, run_conformance
+from .setup import (
+    SETUP_GUIDES,
+    AuthType,
+    CredentialField,
+    ProviderSetupGuide,
+    SetupResult,
+    SetupState,
+    all_guides,
+    setup_guide,
+    verify_setup,
+)
 
 __all__ = [
     # adapter contract
@@ -59,4 +70,14 @@ __all__ = [
     "run_conformance",
     "ConformanceReport",
     "Check",
+    # setup guides (the declarative "what to fetch" contract every setup UI renders)
+    "ProviderSetupGuide",
+    "CredentialField",
+    "AuthType",
+    "SetupState",
+    "SetupResult",
+    "SETUP_GUIDES",
+    "setup_guide",
+    "all_guides",
+    "verify_setup",
 ]
