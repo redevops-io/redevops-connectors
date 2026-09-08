@@ -1,0 +1,12 @@
+{
+  "id": "re_TEST456",
+  "object": "refund",
+  "amount": 1099,
+  "balance_transaction": "txn_TEST999",
+  "charge": "ch_TEST123",
+  "created": 1692942318,
+  "currency": "usd",
+  "payment_intent": "pi_TEST789",
+  "reason": null,
+  "status": "succeeded"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "ch_TEST123",
+  "object": "charge",
+  "amount": 1099,
+  "amount_captured": 1099,
+  "amount_refunded": 0,
+  "captured": true,
+  "created": 1679090539,
+  "currency": "usd",
+  "livemode": false,
+  "paid": true,
+  "payment_intent": "pi_TEST789",
+  "refunded": false,
+  "status": "succeeded"
+}

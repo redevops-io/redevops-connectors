@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "INVALID_ACCOUNT",
+    "message": "accountId 98432 is not connected for platform tiktok"
+  }
+}
