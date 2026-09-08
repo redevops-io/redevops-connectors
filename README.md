@@ -70,8 +70,10 @@ redevops_connectors/
   oauth.py         OAuth2 authorization-code flow
   conformance.py   run_conformance() — the deterministic adapter gate
   providers/
-    slack.py       first reference adapter (OAuth2 v2)
-fixtures/slack/    canned provider responses for fixture-replay tests
+    slack.py       chat + approvals (OAuth2 v2)
+    klaviyo.py     email/SMS marketing (private API key)
+    ayrshare.py    publish to many venues in one call (API key)
+fixtures/<provider>/  canned provider responses for fixture-replay tests
 tests/             deterministic — FakeTransport + InMemorySecretResolver
 ```
 
@@ -81,10 +83,24 @@ tests/             deterministic — FakeTransport + InMemorySecretResolver
 uv run --extra dev python -m pytest -q
 ```
 
-## First provider
+## Providers
 
-**Slack** (OAuth2 v2) — the approval surface in the Integration Plane demo and the simplest OAuth
-to stand up. Capabilities: `chat.message.send` (tier 3, write), `chat.message.read`,
-`identity.read`. More providers follow the same shape.
+Same shape for every adapter (injected transport + resolver, capabilities with a tier + a
+write flag, envelope-required writes, error normalization, conformance). Auth is per-provider —
+OAuth2 or a private API key; the SDK handles both.
+
+- **Slack** (OAuth2 v2) — the approval surface in the demo. `chat.message.send` (tier 3),
+  `chat.message.read`, `approval.request` (tier 3), `identity.read`.
+- **Klaviyo** (private API key, JSON:API + `revision` header) — email/SMS marketing.
+  `contact.upsert` (tier 2; a duplicate resolves to the existing profile, so it's idempotent),
+  `email.event.track` (tier 3; fires a flow — Klaviyo returns 202 with no id, so a tracked event
+  is honestly UNKNOWN for reconciliation, never faked).
+- **Ayrshare** (bearer API key) — **publish one piece of content to many venues in one call**
+  (X, LinkedIn, Instagram, Facebook, TikTok, YouTube, Reddit, Telegram, Threads, Bluesky, …).
+  `content.publish` (tier 3) returns an Ayrshare post id + per-venue results; `content.status`.
+
+For multi-venue publishing, **Ayrshare** is the easiest unified API that still delivers the
+capability; **Blotato** (flat pricing, native MCP) and open-source, self-hostable **Postiz** are
+the natural next adapters — all fit this same contract.
 
 Licensed AGPL-3.0-or-later.
