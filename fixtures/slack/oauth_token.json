@@ -1,0 +1,1 @@
+{"ok": true, "access_token": "xoxb-TEST-ACCESS-TOKEN", "token_type": "bot", "scope": "chat:write,channels:history,users:read", "bot_user_id": "U1", "team": {"id": "T123", "name": "Acme"}, "expires_in": 43200, "refresh_token": "xoxe-TEST-REFRESH"}
