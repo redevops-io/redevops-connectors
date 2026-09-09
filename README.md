@@ -98,9 +98,22 @@ OAuth2 or a private API key; the SDK handles both.
 - **Ayrshare** (bearer API key) — **publish one piece of content to many venues in one call**
   (X, LinkedIn, Instagram, Facebook, TikTok, YouTube, Reddit, Telegram, Threads, Bluesky, …).
   `content.publish` (tier 3) returns an Ayrshare post id + per-venue results; `content.status`.
+- **Blotato** (`blotato-api-key`) — multi-venue publish for agents. `content.publish` (tier 3;
+  async → returns a `postSubmissionId`), `content.status`.
+- **Postiz** (API key, **self-hostable** — `base_url` configurable) — open-source multi-venue
+  publish. `content.publish` (tier 3) across connected integrations.
+- **Gmail** (OAuth2 Google) — `email.message.send` (tier 3, RFC822 → base64url), `email.message.read`.
+- **Google Calendar** (OAuth2 Google, shared client) — `calendar.event.create` (tier 3),
+  `calendar.availability.read` (freeBusy).
+- **WhatsApp Business** (Meta Cloud API, bearer token + `phone_number_id`) — `chat.message.send`
+  (tier 3). Official Cloud API, not unofficial web automation.
+- **HubSpot** (private-app token or OAuth bearer) — `crm.contact.upsert` (tier 2; duplicate →
+  existing id, idempotent), `crm.note.create`.
+- **Stripe** (secret key, form-encoded) — `billing.charge.find` (tier 1),
+  `billing.refund.execute` (tier 4; the Runtime gates it, the adapter executes).
 
-For multi-venue publishing, **Ayrshare** is the easiest unified API that still delivers the
-capability; **Blotato** (flat pricing, native MCP) and open-source, self-hostable **Postiz** are
-the natural next adapters — all fit this same contract.
+For multi-venue publishing specifically, **Ayrshare** is the easiest unified API that delivers the
+capability, with **Blotato** (flat pricing, native MCP) and open-source self-hostable **Postiz** as
+the alternatives — all three ship here on the same contract.
 
 Licensed AGPL-3.0-or-later.

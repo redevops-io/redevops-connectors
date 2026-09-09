@@ -1,0 +1,15 @@
+{
+  "messaging_product": "whatsapp",
+  "contacts": [
+    {
+      "input": "+16505551234",
+      "wa_id": "16505551234"
+    }
+  ],
+  "messages": [
+    {
+      "id": "wamid.HBgLMTY1MDU1NTEyMzQVAgARGBI4MjZGRDA0OUE2OTQ3RkEyMzcA",
+      "message_status": "accepted"
+    }
+  ]
+}
