@@ -1,0 +1,6 @@
+{
+  "kind": "calendar#calendar",
+  "id": "acme.ops@example.com",
+  "summary": "ACME Ops",
+  "timeZone": "America/New_York"
+}

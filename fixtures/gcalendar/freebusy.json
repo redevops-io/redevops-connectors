@@ -1,0 +1,12 @@
+{
+  "kind": "calendar#freeBusy",
+  "timeMin": "2026-09-10T00:00:00Z",
+  "timeMax": "2026-09-11T00:00:00Z",
+  "calendars": {
+    "primary": {
+      "busy": [
+        {"start": "2026-09-10T15:00:00Z", "end": "2026-09-10T15:30:00Z"}
+      ]
+    }
+  }
+}
