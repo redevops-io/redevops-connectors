@@ -221,6 +221,21 @@ SETUP_GUIDES: Dict[str, ProviderSetupGuide] = {
         smoke_capability="billing.charge.find", safe_write_capability="",  # refunds are Tier 4 — not a "safe" test
         common_errors=(("Key is live-mode", "Use a test-mode key (sk_test_…) for the demo."),),
     ),
+    "polar": ProviderSetupGuide(
+        provider="polar", display_name="Polar", auth_type=AuthType.API_KEY,
+        used_for="Billing / merchant-of-record — find orders and issue refunds.",
+        setup_url="https://polar.sh/settings",
+        credential_fields=(_key("POLAR_ACCESS_TOKEN", label="Organization Access Token", example="polar_oat_…"),
+                           CredentialField(name="organization_id", label="Organization ID", secret=False,
+                                           env_var="POLAR_ORG_ID")),
+        required_scopes=("orders:read", "refunds:write"),
+        test_mode_available=True,
+        manual_steps=("Polar → Settings → create an Organization Access Token.",
+                      "Copy the polar_oat_… token; note your Organization ID.",
+                      "Use the sandbox (sandbox-api.polar.sh) for testing — refunds on production move real money."),
+        smoke_capability="billing.order.find", safe_write_capability="",  # refunds are Tier 4
+        common_errors=(("Production token", "Refunds hit real orders — use a sandbox token/env for testing."),),
+    ),
 }
 
 
