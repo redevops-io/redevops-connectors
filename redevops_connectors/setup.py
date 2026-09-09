@@ -276,3 +276,131 @@ def verify_setup(adapter: Any, *, credential_ref: str = "", config: Optional[Dic
         provider=provider, state=SetupState.VERIFIED_READ,
         detail=str(getattr(state, "detail", "")),
         account_ref=str(getattr(state, "account_ref", "")), capabilities=caps)
+
+
+# ── deployment auth profile: HOW a deployment provisions the OAuth *client* ──────
+#
+# The per-user connect flow (LoopbackConnect / embedded_signup_exchange) answers
+# "how does *this user* get a token". That flow always needs an OAuth *client*
+# (client_id/secret) registered on some provider app — and *who owns that app and
+# where its secret lives* is a deployment decision, orthogonal to the user flow.
+# ``ProviderAuthProfile`` names that decision; ``ProviderConnectDescriptor`` is the
+# machine-readable thing a Projects "Connect <Provider>" button renders from it.
+class ProviderAuthProfile(str, Enum):
+    """How a given ReDevOps deployment obtains the OAuth *client* credentials for a
+    provider — distinct from the per-user token flow, which is always the same OAuth
+    authorization-code exchange regardless of profile."""
+
+    HOSTED_REDEVOPS = "hosted_redevops"
+    """Hosted ReDevOps service: a centrally-managed ReDevOps-owned OAuth client is
+    used; the user only clicks Connect."""
+
+    REDEVOPS_BROKERED = "redevops_brokered"
+    """Self-hosted runtime delegates the OAuth authorization to a central ReDevOps
+    authorization broker (no client secret on the self-hosted box)."""
+
+    BYO_OAUTH_APP = "byo_oauth_app"
+    """Enterprise operator supplies their own client_id/client_secret (registered in
+    their own provider org)."""
+
+    MANUAL_CREDENTIAL = "manual_credential"
+    """Fallback: an operator pastes a long-lived API key / token directly; no OAuth
+    client involved."""
+
+
+# Providers whose credential is an OAuth token (a client app is involved) rather than
+# a pasted API key. For these, app registration typically forces human-gated steps.
+_OAUTH_CLIENT_AUTH_TYPES = (AuthType.OAUTH2, AuthType.TOKEN)
+
+# Default human-in-the-loop steps that block a fully-unattended *app registration* for
+# an OAuth-client provider (google/slack/hubspot/meta …). These document the one-time
+# bootstrap of the OAuth app — they are NOT part of the per-user connect flow.
+_DEFAULT_OAUTH_HUMAN_GATES: Tuple[str, ...] = ("MFA", "legal acceptance", "app review")
+
+
+@dataclass(frozen=True)
+class ProviderConnectDescriptor:
+    """The machine-readable descriptor a Projects "Connect <Provider>" button renders.
+
+    It carries *no secret*: ``client_id_ref`` is an opaque CredentialRef the deployment
+    resolves the actual client_id/secret from at the moment of use — never an inline
+    value. ``auth_profile`` records the deployment-level OAuth-client provisioning
+    decision (hosted vs brokered vs BYO vs manual)."""
+
+    provider: str
+    display_name: str
+    auth_profile: ProviderAuthProfile = ProviderAuthProfile.HOSTED_REDEVOPS
+    auth_type: AuthType = AuthType.OAUTH2
+    client_id_ref: str = ""       # opaque CredentialRef → client_id/secret; empty for manual
+    redirect_uri: str = ""        # loopback/hosted callback registered on the ReDevOps OAuth app
+    scopes: Tuple[str, ...] = ()
+    embedded_signup: bool = False  # True only for whatsapp_business (Meta Embedded Signup)
+    human_gates: Tuple[str, ...] = ()  # human steps blocking unattended *app registration*
+    notes: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "provider": self.provider,
+            "display_name": self.display_name,
+            "auth_profile": self.auth_profile.value,
+            "auth_type": self.auth_type.value,
+            "client_id_ref": self.client_id_ref,
+            "redirect_uri": self.redirect_uri,
+            "scopes": list(self.scopes),
+            "embedded_signup": self.embedded_signup,
+            "human_gates": list(self.human_gates),
+            "notes": self.notes,
+        }
+
+
+def connect_descriptor(
+    provider: str,
+    *,
+    auth_profile: ProviderAuthProfile = ProviderAuthProfile.HOSTED_REDEVOPS,
+) -> ProviderConnectDescriptor:
+    """Derive a :class:`ProviderConnectDescriptor` from the provider's setup guide.
+
+    Pulls ``display_name``/``auth_type``/``scopes`` from ``SETUP_GUIDES[provider]``, marks
+    ``embedded_signup`` for the WhatsApp provider, and carries default ``human_gates`` for
+    OAuth-client providers (empty for pure API-key ones). Raises ``KeyError`` for an
+    unknown provider."""
+    guide = SETUP_GUIDES.get(provider)
+    if guide is None:
+        raise KeyError(f"unknown provider {provider!r}; known: {sorted(SETUP_GUIDES)}")
+
+    is_oauth_client = guide.auth_type in _OAUTH_CLIENT_AUTH_TYPES
+    embedded_signup = provider in ("whatsapp_business", "whatsapp")
+
+    # Pure API-key providers have no OAuth client → no OAuth scopes, no app-registration
+    # human gates. (A guide's ``required_scopes`` on an API-key provider are permission
+    # labels on the pasted key, not OAuth scopes, so they do not belong on the descriptor.)
+    scopes = tuple(guide.required_scopes) if is_oauth_client else ()
+    human_gates = _DEFAULT_OAUTH_HUMAN_GATES if is_oauth_client else ()
+
+    # The client secret's location depends on the deployment profile. Manual and
+    # API-key providers resolve no OAuth client at all → empty ref.
+    if auth_profile is ProviderAuthProfile.MANUAL_CREDENTIAL or not is_oauth_client:
+        client_id_ref = ""
+    else:
+        client_id_ref = f"credref://oauth-client/{auth_profile.value}/{provider}"
+
+    # Only an interactive loopback/hosted redirect provider needs a redirect_uri.
+    redirect_uri = ""
+    if is_oauth_client and not embedded_signup and auth_profile is not ProviderAuthProfile.MANUAL_CREDENTIAL:
+        redirect_uri = (
+            "https://connect.redevops.io/oauth/callback"
+            if auth_profile is ProviderAuthProfile.HOSTED_REDEVOPS
+            else "http://127.0.0.1:8765/callback"
+        )
+
+    return ProviderConnectDescriptor(
+        provider=provider,
+        display_name=guide.display_name,
+        auth_profile=auth_profile,
+        auth_type=guide.auth_type,
+        client_id_ref=client_id_ref,
+        redirect_uri=redirect_uri,
+        scopes=scopes,
+        embedded_signup=embedded_signup,
+        human_gates=human_gates,
+    )

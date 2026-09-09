@@ -40,10 +40,13 @@ from .setup import (
     SETUP_GUIDES,
     AuthType,
     CredentialField,
+    ProviderAuthProfile,
+    ProviderConnectDescriptor,
     ProviderSetupGuide,
     SetupResult,
     SetupState,
     all_guides,
+    connect_descriptor,
     setup_guide,
     verify_setup,
 )
@@ -94,4 +97,8 @@ __all__ = [
     "setup_guide",
     "all_guides",
     "verify_setup",
+    # deployment auth profile (HOW a deployment provisions the OAuth *client*)
+    "ProviderAuthProfile",
+    "ProviderConnectDescriptor",
+    "connect_descriptor",
 ]
