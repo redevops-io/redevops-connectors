@@ -1,0 +1,1 @@
+{"emailer_template": {"id": "tmpl_1", "subject": "Quick question", "body_html": "<p>Hi {{first_name}}</p>"}}

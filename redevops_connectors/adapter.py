@@ -33,11 +33,23 @@ class UnsupportedCapability(NotImplementedError):
 @dataclass(frozen=True)
 class Capability:
     """One logical operation an adapter advertises, with its risk tier (0-4) and whether
-    it is a write (a consequential action that needs an execution envelope)."""
+    it is a write (a consequential action that needs an execution envelope).
+
+    The three physical-capability fields let an adapter advertise, BEFORE execution, whether
+    the Runtime can actually perform the operation via API or whether it must route to a
+    human. They default so every existing adapter is unchanged:
+
+      * ``automatable`` — can the Runtime perform it via API at all?
+      * ``human_required`` — does completing it require a human (e.g. a provider-UI toggle)?
+      * ``execution_strategy`` — ``"api"`` (default) or ``"provider_ui"`` (a planner routes
+        a ``provider_ui`` capability to a human gate instead of calling ``execute``)."""
 
     name: str
     tier: int = 0
     write: bool = False
+    automatable: bool = True          # can the Runtime perform it via API?
+    human_required: bool = False      # does completing it require a human?
+    execution_strategy: str = "api"   # "api" | "provider_ui"
 
     def __post_init__(self) -> None:
         if not 0 <= int(self.tier) <= 4:
