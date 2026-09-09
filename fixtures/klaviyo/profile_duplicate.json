@@ -1,0 +1,1 @@
+{"errors": [{"id": "e1", "status": 409, "title": "duplicate profile", "detail": "A profile already exists with this email", "meta": {"duplicate_profile_id": "PROF01"}}]}

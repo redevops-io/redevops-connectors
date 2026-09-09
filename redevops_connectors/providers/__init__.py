@@ -4,5 +4,7 @@ install ships only the SDK and lightweight definitions."""
 from __future__ import annotations
 
 from .slack import SLACK_OAUTH, SlackAdapter
+from .klaviyo import KLAVIYO_REVISION, KlaviyoAdapter
+from .ayrshare import AyrshareAdapter
 
-__all__ = ["SlackAdapter", "SLACK_OAUTH"]
+__all__ = ["SlackAdapter", "SLACK_OAUTH", "KlaviyoAdapter", "KLAVIYO_REVISION", "AyrshareAdapter"]
