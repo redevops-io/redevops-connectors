@@ -18,6 +18,7 @@ from .gcalendar import GoogleCalendarAdapter
 from .whatsapp import WhatsAppAdapter
 from .hubspot import HubSpotAdapter
 from .stripe import StripeAdapter
+from .polar import PolarAdapter
 
 __all__ = [
     "SlackAdapter", "SLACK_OAUTH",
@@ -29,4 +30,5 @@ __all__ = [
     "WhatsAppAdapter",
     "HubSpotAdapter",
     "StripeAdapter",
+    "PolarAdapter",
 ]

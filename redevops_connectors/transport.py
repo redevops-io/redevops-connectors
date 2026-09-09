@@ -70,8 +70,15 @@ class FakeTransport:
 class UrllibTransport:
     """The live transport (stdlib ``urllib``). Not exercised in CI."""
 
+    #: Sent unless the adapter supplies its own. The stdlib default (``Python-urllib/x``)
+    #: is blocked by Cloudflare-fronted APIs (e.g. Polar) with a 403, so give a real one.
+    user_agent: str = "redevops-connectors/1.0"
+
     def request(self, method, url, *, headers=None, body=None, timeout=30.0) -> Response:
         req = urllib.request.Request(url, data=body, method=method.upper())
+        sent = {k.lower() for k in (headers or {})}
+        if "user-agent" not in sent:
+            req.add_header("User-Agent", self.user_agent)
         for k, v in (headers or {}).items():
             req.add_header(k, v)
         try:
