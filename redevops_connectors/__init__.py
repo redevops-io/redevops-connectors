@@ -26,7 +26,14 @@ from .adapter import (
     UnsupportedCapability,
 )
 from .credentials import CredentialRef, InMemorySecretResolver, SecretResolver, redact
-from .oauth import OAuth2Config, OAuthFlow, TokenGrant
+from .oauth import OAuth2Config, OAuthError, OAuthFlow, TokenGrant
+from .connect_flow import (
+    ConnectResult,
+    CredentialBroker,
+    InMemoryCredentialBroker,
+    LoopbackConnect,
+    embedded_signup_exchange,
+)
 from .transport import FakeTransport, Response, Transport, UrllibTransport
 from .conformance import Check, ConformanceReport, run_conformance
 from .setup import (
@@ -60,7 +67,14 @@ __all__ = [
     # oauth
     "OAuth2Config",
     "OAuthFlow",
+    "OAuthError",
     "TokenGrant",
+    # connect orchestration (the runtime fetches the token; no secret is ever pasted)
+    "LoopbackConnect",
+    "ConnectResult",
+    "CredentialBroker",
+    "InMemoryCredentialBroker",
+    "embedded_signup_exchange",
     # transport
     "Transport",
     "Response",
