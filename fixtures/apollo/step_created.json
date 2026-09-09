@@ -1,0 +1,5 @@
+{
+  "emailer_step": {"id": "step_1", "emailer_campaign_id": "seq_1", "position": 1, "type": "auto_email", "wait_mode": "day", "wait_time": 0},
+  "emailer_touches": [{"id": "touch_1", "emailer_template_id": "tmpl_1"}],
+  "emailer_templates": [{"id": "tmpl_1"}]
+}

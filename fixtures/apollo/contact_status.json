@@ -1,0 +1,1 @@
+{"contact": {"id": "cont_1", "email": "t@example.com", "contact_campaign_statuses": [{"id": "ccs_1", "status": "active", "inactive_reason": null, "emailer_campaign_id": "seq_1"}]}}

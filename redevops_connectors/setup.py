@@ -236,6 +236,27 @@ SETUP_GUIDES: Dict[str, ProviderSetupGuide] = {
         smoke_capability="billing.order.find", safe_write_capability="",  # refunds are Tier 4
         common_errors=(("Production token", "Refunds hit real orders — use a sandbox token/env for testing."),),
     ),
+    "apollo": ProviderSetupGuide(
+        provider="apollo", display_name="Apollo", auth_type=AuthType.API_KEY,
+        used_for="Cold outreach via Apollo sequences through a warmed, connected mailbox.",
+        setup_url="https://app.apollo.io/",
+        credential_fields=(_key("APOLLO_API_KEY", label="API Key"),
+                           CredentialField(name="sequence_id", label="Sequence (campaign) ID",
+                                           secret=False, env_var="APOLLO_SEQUENCE_ID"),
+                           CredentialField(name="sender_account_id", label="Sender email account ID",
+                                           secret=False, env_var="APOLLO_SENDER_ACCOUNT_ID")),
+        account_prerequisites=("Connect and warm the sending mailbox in Apollo.",
+                               "Create the sequence (campaign) you will enroll contacts into.",),
+        manual_steps=("Apollo → Settings → API → create an API key.",
+                      "Connect a mailbox (Settings → Mailboxes) and note the sender email account ID.",
+                      "Create a sequence and note its campaign (sequence) ID.",
+                      "Activating a sequence is done by a human toggle in the Apollo UI — the API cannot do it."),
+        smoke_capability="outreach.observe", safe_write_capability="",
+        common_errors=(("Wait mode must be valid",
+                        "emailer step wait_mode must be day/minute/hour"),
+                       ("Sequence inactive",
+                        "activating a sequence is UI-only in Apollo — a human toggles it")),
+    ),
 }
 
 
