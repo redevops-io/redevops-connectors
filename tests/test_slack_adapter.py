@@ -23,6 +23,15 @@ def test_send_message_returns_a_provider_object_id(slack_transport, resolver):
     assert r.ok and r.provider_object_id == "C123:1699999999.000100"
 
 
+def test_approval_request_posts_the_prompt_as_a_message(slack_transport, resolver):
+    a = _adapter(slack_transport, resolver)
+    r = a.execute("approval.request", {"channel": "C123", "prompt": "Approve refund ch_1?"},
+                  envelope=object())
+    assert r.ok and r.provider_object_id == "C123:1699999999.000100"
+    # approval.request is a Tier-3 write — it refuses without an envelope, same as a send
+    assert not a.execute("approval.request", {"channel": "C123", "prompt": "x"}, envelope=None).ok
+
+
 def test_write_refuses_without_an_envelope(slack_transport, resolver):
     r = _adapter(slack_transport, resolver).execute("chat.message.send", {"channel": "C123", "text": "hi"}, envelope=None)
     assert not r.ok and "envelope" in r.error.lower()
