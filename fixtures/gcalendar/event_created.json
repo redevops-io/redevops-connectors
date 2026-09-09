@@ -1,0 +1,9 @@
+{
+  "kind": "calendar#event",
+  "id": "EVT01",
+  "status": "confirmed",
+  "htmlLink": "https://www.google.com/calendar/event?eid=RVZUMDE",
+  "summary": "Quarterly review",
+  "start": {"dateTime": "2026-09-10T15:00:00-04:00"},
+  "end": {"dateTime": "2026-09-10T15:30:00-04:00"}
+}

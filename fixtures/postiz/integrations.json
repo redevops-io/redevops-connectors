@@ -1,0 +1,4 @@
+[
+  {"id": "INT01", "name": "RedevOps on X", "identifier": "x", "picture": "https://uploads.postiz.com/p/int01.png", "disabled": false, "profile": "redevops", "customer": {"id": "CUST01", "name": "RedevOps"}},
+  {"id": "INT02", "name": "RedevOps on LinkedIn", "identifier": "linkedin", "picture": "https://uploads.postiz.com/p/int02.png", "disabled": false, "profile": "redevops", "customer": {"id": "CUST01", "name": "RedevOps"}}
+]
