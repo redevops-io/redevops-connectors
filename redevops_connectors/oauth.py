@@ -17,7 +17,7 @@ from __future__ import annotations
 import json as _json
 import time
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Mapping, Optional, Tuple
 
 from .credentials import CredentialRef, SecretResolver
@@ -33,6 +33,10 @@ class OAuth2Config:
     client_secret_ref: CredentialRef   # resolved at the token call, never inlined
     scopes: Tuple[str, ...] = ()
     redirect_uri: str = ""
+    #: Extra provider-specific query params for the consent link (step 1 only), e.g. Google's
+    #: ``{"access_type": "offline", "prompt": "consent"}`` to obtain a refresh token, or
+    #: Microsoft's ``prompt``. Merged into (and override) the standard authorize params.
+    extra_authorize_params: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -67,6 +71,9 @@ class OAuthFlow:
             "scope": " ".join(self.config.scopes),
             "state": state,
         }
+        # provider-specific extras (e.g. Google access_type=offline & prompt=consent for a
+        # refresh token) — applied last so a provider can override a default if it must.
+        params.update(dict(self.config.extra_authorize_params))
         return self.config.authorize_url + "?" + urllib.parse.urlencode(params)
 
     # ── step 2: code -> tokens (client secret resolved here, never stored) ──────

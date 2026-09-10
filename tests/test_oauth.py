@@ -24,6 +24,20 @@ def test_authorize_url_carries_the_consent_params(slack_transport, resolver):
         assert part in url
 
 
+def test_authorize_url_merges_extra_provider_params(slack_transport, resolver):
+    # provider-specific extras (Google needs these two for a refresh token) are merged in
+    from redevops_connectors.oauth import OAuth2Config
+    cfg = OAuth2Config(
+        provider="google", authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
+        token_url="https://oauth2.googleapis.com/token", client_id="cid",
+        client_secret_ref="google:client", scopes=("s1", "s2"),
+        redirect_uri="https://redevops.io/cb",
+        extra_authorize_params={"access_type": "offline", "prompt": "consent"})
+    url = OAuthFlow(config=cfg, resolver=resolver, transport=slack_transport).authorize_url(state="s-1")
+    assert "access_type=offline" in url and "prompt=consent" in url
+    assert "client_id=cid" in url and "state=s-1" in url          # standard params still present
+
+
 def test_exchange_code_returns_a_token_grant(slack_transport, resolver):
     grant = _flow(slack_transport, resolver).exchange_code("code-xyz", now=1_000_000.0)
     assert grant.access_token == "xoxb-TEST-ACCESS-TOKEN"
