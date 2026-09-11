@@ -16,6 +16,7 @@ from .google_common import GOOGLE_OAUTH
 from .gmail import GmailAdapter
 from .gcalendar import GoogleCalendarAdapter
 from .whatsapp import WhatsAppAdapter
+from .whatsapp_waha import WhatsAppWahaAdapter
 from .hubspot import HubSpotAdapter
 from .stripe import StripeAdapter
 from .polar import PolarAdapter
@@ -29,6 +30,7 @@ __all__ = [
     "PostizAdapter", "POSTIZ_PUBLIC_API",
     "GOOGLE_OAUTH", "GmailAdapter", "GoogleCalendarAdapter",
     "WhatsAppAdapter",
+    "WhatsAppWahaAdapter",
     "HubSpotAdapter",
     "StripeAdapter",
     "PolarAdapter",
