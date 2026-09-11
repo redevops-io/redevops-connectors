@@ -215,6 +215,20 @@ SETUP_GUIDES: Dict[str, ProviderSetupGuide] = {
         smoke_capability="session.status", safe_write_capability="chat.message.send",
         common_errors=(("Session status SCAN_QR_CODE", "The number isn't paired yet — scan the QR in the WAHA dashboard."),),
     ),
+    "web": ProviderSetupGuide(
+        provider="web", display_name="Web research", auth_type=AuthType.API_KEY,
+        used_for="Fetch a public page and run a web search (research for enrichment/outreach).",
+        setup_url="https://brave.com/search/api/",
+        credential_fields=(
+            _key("BRAVE_SEARCH_API_KEY", label="Brave Search API key (web.search only)", example="BSA…"),
+            CredentialField(name="search_base", label="Search API base (self-host/override)", secret=False,
+                            env_var="WEB_SEARCH_BASE", example="https://api.search.brave.com/res/v1"),
+        ),
+        account_prerequisites=("web.fetch needs no key; web.search needs a search-API key (Brave by default).",),
+        manual_steps=("For web.search: get a Brave Search API key at brave.com/search/api.",
+                      "web.fetch works with no credential — it GETs a public URL through the governed capability."),
+        smoke_capability="web.fetch", safe_write_capability="",
+    ),
     "hubspot": ProviderSetupGuide(
         provider="hubspot", display_name="HubSpot", auth_type=AuthType.TOKEN,
         used_for="Customer lookup — upsert contacts and add notes.",
