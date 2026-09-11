@@ -82,6 +82,7 @@ redevops_connectors/
     polar.py       merchant-of-record billing / refunds (API key + organization_id)
     slack.py       chat + approvals (OAuth2 v2)
     whatsapp.py    WhatsApp Business — Meta official Cloud API (token + phone_number_id)
+    whatsapp_waha.py  WhatsApp via WAHA — self-hosted HTTP gateway, multi-number (base_url + key)
     klaviyo.py     email/SMS marketing (private API key)
     postiz.py      self-hostable multi-venue social publishing (base_url + API key)
     ayrshare.py    publish to many venues in one call (API key)
@@ -115,6 +116,7 @@ OAuth2 or a private API key; the SDK handles both.
 - **Slack** (OAuth2 v2) — the approval surface in the demo. `chat.message.send` (tier 3),
   `chat.message.read`, `approval.request` (tier 3), `identity.read`.
 - **WhatsApp Business** (token auth) — Meta's **official** WhatsApp Business Cloud API (Graph). `chat.message.send`; the `phone_number_id` is non-secret config (not a credential). It deliberately does **not** drive any unofficial WhatsApp-Web / scraping path.
+- **WhatsApp (WAHA)** (self-host `base_url` + optional `X-Api-Key`) — the self-hosted **WAHA** HTTP gateway, for **multiple numbers** paired by QR with no Meta approval (the SMB/LATAM path). `chat.message.send` (tier 3; `to` normalized to a `…@c.us` chatId), `chat.message.read`, `session.status`. A distinct provider from the Cloud-API adapter above; delivery reconciles via WAHA webhooks.
 
 **Marketing & social publishing**
 
