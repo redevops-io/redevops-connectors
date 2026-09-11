@@ -87,6 +87,8 @@ redevops_connectors/
     postiz.py      self-hostable multi-venue social publishing (base_url + API key)
     ayrshare.py    publish to many venues in one call (API key)
     blotato.py     multi-venue social publishing, flat pricing (API key)
+    apollo.py      cold-outreach sequences + contact/company enrichment (API key)
+    web.py         web.fetch (a public page) + web.search (research; Brave by default)
 fixtures/<provider>/  canned provider responses for fixture-replay tests
 tests/             deterministic — FakeTransport + InMemorySecretResolver
 ```
@@ -130,13 +132,16 @@ OAuth2 or a private API key; the SDK handles both.
 - **Postiz** (self-host `base_url` + API key) — open-source, self-hostable multi-venue social publishing.
 - **Blotato** (API key) — multi-venue social publishing with flat pricing.
 
-**Enrichment & outreach**
+**Enrichment, outreach & research**
 
 - **Apollo** (`apollo.io`, private API key in `X-Api-Key`) — cold-outreach sequences through a warmed
   mailbox (`contact.upsert` · `outreach.sequence.configure` · `outreach.enroll` · `outreach.sequence.activate`
   — the last advertised **non-automatable** / human-required, since Apollo activation is UI-only) **and**
   contact/company **enrichment** (`contact.enrich` via `people/match`, `company.enrich` by domain — reads, no
   envelope; the returned PII/customer-content is classified on egress).
+- **Web** (`web.fetch` needs no key; `web.search` uses a Brave Search API key by default, swappable via
+  `search_base`) — the research half of the loop: `web.fetch` GETs a public page, `web.search` returns
+  `{title, url, description}`. Both reads; the governed capability is what makes the external reach audited.
 
 All three social publishers fit the same contract; pick by hosting/pricing preference (Ayrshare = easiest unified API, Postiz = self-hostable OSS, Blotato = flat pricing).
 

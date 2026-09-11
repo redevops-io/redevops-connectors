@@ -17,6 +17,7 @@ from .gmail import GmailAdapter
 from .gcalendar import GoogleCalendarAdapter
 from .whatsapp import WhatsAppAdapter
 from .whatsapp_waha import WhatsAppWahaAdapter
+from .web import WebAdapter
 from .hubspot import HubSpotAdapter
 from .stripe import StripeAdapter
 from .polar import PolarAdapter
@@ -31,6 +32,7 @@ __all__ = [
     "GOOGLE_OAUTH", "GmailAdapter", "GoogleCalendarAdapter",
     "WhatsAppAdapter",
     "WhatsAppWahaAdapter",
+    "WebAdapter",
     "HubSpotAdapter",
     "StripeAdapter",
     "PolarAdapter",
