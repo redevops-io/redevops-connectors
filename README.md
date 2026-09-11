@@ -128,6 +128,14 @@ OAuth2 or a private API key; the SDK handles both.
 - **Postiz** (self-host `base_url` + API key) — open-source, self-hostable multi-venue social publishing.
 - **Blotato** (API key) — multi-venue social publishing with flat pricing.
 
+**Enrichment & outreach**
+
+- **Apollo** (`apollo.io`, private API key in `X-Api-Key`) — cold-outreach sequences through a warmed
+  mailbox (`contact.upsert` · `outreach.sequence.configure` · `outreach.enroll` · `outreach.sequence.activate`
+  — the last advertised **non-automatable** / human-required, since Apollo activation is UI-only) **and**
+  contact/company **enrichment** (`contact.enrich` via `people/match`, `company.enrich` by domain — reads, no
+  envelope; the returned PII/customer-content is classified on egress).
+
 All three social publishers fit the same contract; pick by hosting/pricing preference (Ayrshare = easiest unified API, Postiz = self-hostable OSS, Blotato = flat pricing).
 
 Licensed AGPL-3.0-or-later.

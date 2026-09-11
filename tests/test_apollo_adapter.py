@@ -39,6 +39,8 @@ def transport():
     t.route("POST", "/emailer_steps", Response(200, json=_load("step_created.json")))
     t.route("PUT", "/emailer_templates/tmpl_1", Response(200, json=_load("template_updated.json")))
     t.route("POST", "/emailer_campaigns/seq_1/add_contact_ids", Response(200, json=_load("enroll_response.json")))
+    t.route("POST", "/people/match", Response(200, json=_load("people_match.json")))
+    t.route("GET", "/organizations/enrich", Response(200, json=_load("organization_enrich.json")))
     return t
 
 
@@ -158,3 +160,42 @@ def test_apollo_passes_conformance(transport, resolver):
                              write_request={"email": "t@example.com"}, observe_ref=CONTACT_ID)
     report = run_conformance(_adapter(transport, resolver), probe=probe, resolver=resolver)
     assert report.passed, [c.name for c in report.failures()]
+
+
+# ── enrichment / research (reads — no envelope required) ──────────────────────
+def test_contact_enrich_returns_the_person_record(transport, resolver):
+    r = _adapter(transport, resolver).execute(
+        "contact.enrich", {"email": "tasha@nutrients.tech"}, envelope=None)   # read ⇒ no envelope
+    assert r.ok and r.provider_object_id == "APOLLO_P1"
+    assert r.data.get("title") == "Head of Platform"
+
+
+def test_company_enrich_by_domain(transport, resolver):
+    r = _adapter(transport, resolver).execute(
+        "company.enrich", {"domain": "nutrients.tech"}, envelope=None)
+    assert r.ok and r.provider_object_id == "APOLLO_O1"
+    assert r.data.get("industry") == "food & beverage"
+
+
+def test_enrich_capabilities_are_reads():
+    a = _adapter(FakeTransport(), InMemorySecretResolver())
+    for name in ("contact.enrich", "company.enrich"):
+        assert _cap(a, name).write is False          # reads ⇒ no execution envelope needed
+
+
+def test_company_enrich_requires_a_domain(transport, resolver):
+    r = _adapter(transport, resolver).execute("company.enrich", {}, envelope=None)
+    assert not r.ok and "domain" in r.error.lower()
+
+
+def test_a_clean_no_match_is_an_empty_success_not_an_error(resolver):
+    t = FakeTransport().route("POST", "/people/match", Response(200, json=_load("no_match.json")))
+    r = _adapter(t, resolver).execute("contact.enrich", {"email": "nobody@nowhere.tld"}, envelope=None)
+    assert r.ok and r.data == {}                     # honest empty, not a failure
+
+
+def test_enrich_sends_the_key_but_never_leaks_it(transport, resolver):
+    r = _adapter(transport, resolver).execute("contact.enrich", {"email": "a@b.com"}, envelope=None)
+    sent = [c for c in transport.calls if "/people/match" in c["url"]]
+    assert sent and sent[0]["headers"].get("X-Api-Key") == KEY     # key on the wire
+    assert KEY not in f"{r.provider_object_id}{r.error}{dict(r.data)}"

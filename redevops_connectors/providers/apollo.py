@@ -26,6 +26,11 @@ Capabilities:
     for it never pretends to succeed — it returns ``ok=False`` with the physical result.
   * ``outreach.observe`` (tier 1, read) — read a contact's enrollment status
     (``GET /contacts/<id>``) from ``contact.contact_campaign_statuses[0]``.
+  * ``contact.enrich`` (tier 1, read) — match/enrich a person from partial identifiers
+    (``POST /people/match``) → the enriched person record. A retrieve, not a mutation, so no
+    execution envelope is required; writing the result into a CRM is a separate governed capability.
+  * ``company.enrich`` (tier 1, read) — enrich an organization by domain
+    (``GET /organizations/enrich``).
 
 Going live: pass a ``UrllibTransport`` and put the API key behind a ``CredentialRef``
 (material ``{"api_key": "…"}`` or ``{"access_token": "…"}``); pass ``sequence_id`` and
@@ -36,6 +41,7 @@ from __future__ import annotations
 
 import json as _json
 from typing import Any, Dict, Mapping, Optional, Tuple
+from urllib.parse import quote
 
 from ..adapter import (
     BaseAdapter,
@@ -77,6 +83,12 @@ class ApolloAdapter(BaseAdapter):
                        automatable=False, human_required=True,
                        execution_strategy="provider_ui"),
             Capability("outreach.observe", tier=1, write=False),
+            # Enrichment/research — reads: they retrieve data about a person/company, they do not
+            # mutate anything at Apollo (writing it into a CRM is a separate governed capability),
+            # so no execution envelope is required. The returned data is PII/customer-content and is
+            # classified on egress like any other read.
+            Capability("contact.enrich", tier=1, write=False),
+            Capability("company.enrich", tier=1, write=False),
         )
 
     # ── connection / health (a free auth/health probe — no credits) ──────────────
@@ -108,7 +120,48 @@ class ApolloAdapter(BaseAdapter):
             return self._activate(capability, request)
         if capability.name == "outreach.observe":
             return self._observe_status(capability, request.get("contact_id") or request.get("id") or "")
+        if capability.name == "contact.enrich":
+            return self._contact_enrich(capability, request)
+        if capability.name == "company.enrich":
+            return self._company_enrich(capability, request)
         return ProviderResult(ok=False, capability=capability.name, error="unhandled capability")
+
+    # ── contact.enrich (people/match — retrieve, don't mutate) ───────────────────
+    def _contact_enrich(self, capability: Capability, request: Dict[str, Any]) -> ProviderResult:
+        body = {k: v for k, v in {
+            "first_name": request.get("first_name"), "last_name": request.get("last_name"),
+            "name": request.get("name"), "email": request.get("email"),
+            "domain": request.get("domain"), "organization_name": request.get("organization_name"),
+        }.items() if v}
+        status, data, err = self._post("/people/match", body)
+        if err:
+            return ProviderResult(ok=False, capability=capability.name, error=err, retryable=True)
+        person = data.get("person") if isinstance(data, dict) else None
+        if status < 400 and isinstance(person, dict):
+            return ProviderResult(ok=True, capability=capability.name,
+                                  provider_object_id=str(person.get("id", "")), data=person)
+        if status < 400:                       # a clean no-match is an honest empty, not an error
+            return ProviderResult(ok=True, capability=capability.name, data={})
+        return ProviderResult(ok=False, capability=capability.name,
+                              error=_msg(data) or "enrich failed", retryable=status == 429 or status >= 500)
+
+    # ── company.enrich (organizations/enrich by domain) ──────────────────────────
+    def _company_enrich(self, capability: Capability, request: Dict[str, Any]) -> ProviderResult:
+        domain = str(request.get("domain", ""))
+        if not domain:
+            return ProviderResult(ok=False, capability=capability.name,
+                                  error="a domain is required", retryable=False)
+        status, data, err = self._get(f"/organizations/enrich?domain={quote(domain)}")
+        if err:
+            return ProviderResult(ok=False, capability=capability.name, error=err, retryable=True)
+        org = data.get("organization") if isinstance(data, dict) else None
+        if status < 400 and isinstance(org, dict):
+            return ProviderResult(ok=True, capability=capability.name,
+                                  provider_object_id=str(org.get("id", "")), data=org)
+        if status < 400:
+            return ProviderResult(ok=True, capability=capability.name, data={})
+        return ProviderResult(ok=False, capability=capability.name,
+                              error=_msg(data) or "enrich failed", retryable=status == 429 or status >= 500)
 
     # ── contact.upsert ──────────────────────────────────────────────────────────
     def _contact_upsert(self, capability: Capability, request: Dict[str, Any]) -> ProviderResult:
