@@ -74,9 +74,18 @@ redevops_connectors/
   oauth.py         OAuth2 authorization-code flow
   conformance.py   run_conformance() — the deterministic adapter gate
   providers/
+    google_common.py  shared Google OAuth2 helper (Gmail + Calendar)
+    gmail.py       send/read email (OAuth2)
+    gcalendar.py   calendar events (OAuth2; provider="google_calendar")
+    hubspot.py     CRM contacts/companies/deals (OAuth2)
+    stripe.py      billing / refunds (API key)
+    polar.py       merchant-of-record billing / refunds (API key + organization_id)
     slack.py       chat + approvals (OAuth2 v2)
+    whatsapp.py    WhatsApp Business — Meta official Cloud API (token + phone_number_id)
     klaviyo.py     email/SMS marketing (private API key)
+    postiz.py      self-hostable multi-venue social publishing (base_url + API key)
     ayrshare.py    publish to many venues in one call (API key)
+    blotato.py     multi-venue social publishing, flat pricing (API key)
 fixtures/<provider>/  canned provider responses for fixture-replay tests
 tests/             deterministic — FakeTransport + InMemorySecretResolver
 ```
@@ -93,8 +102,22 @@ Same shape for every adapter (injected transport + resolver, capabilities with a
 write flag, envelope-required writes, error normalization, conformance). Auth is per-provider —
 OAuth2 or a private API key; the SDK handles both.
 
+**CRM & billing**
+
+- **HubSpot** (OAuth2) — CRM. Contacts/companies/deals lookup + upsert; the CRM system of record in the demo.
+- **Stripe** (API key) — billing. Charge/customer lookup and **refunds** (tier 3) — governed, envelope-required.
+- **Polar** (API key + non-secret `organization_id`) — merchant-of-record billing; charge lookup and refunds (tier 3).
+
+**Messaging & email**
+
+- **Gmail** (OAuth2) — send/read email.
+- **Google Calendar** (OAuth2; `provider="google_calendar"`) — calendar events. Shares `google_common.py`'s OAuth helper with Gmail.
 - **Slack** (OAuth2 v2) — the approval surface in the demo. `chat.message.send` (tier 3),
   `chat.message.read`, `approval.request` (tier 3), `identity.read`.
+- **WhatsApp Business** (token auth) — Meta's **official** WhatsApp Business Cloud API (Graph). `chat.message.send`; the `phone_number_id` is non-secret config (not a credential). It deliberately does **not** drive any unofficial WhatsApp-Web / scraping path.
+
+**Marketing & social publishing**
+
 - **Klaviyo** (private API key, JSON:API + `revision` header) — email/SMS marketing.
   `contact.upsert` (tier 2; a duplicate resolves to the existing profile, so it's idempotent),
   `email.event.track` (tier 3; fires a flow — Klaviyo returns 202 with no id, so a tracked event
@@ -102,9 +125,9 @@ OAuth2 or a private API key; the SDK handles both.
 - **Ayrshare** (bearer API key) — **publish one piece of content to many venues in one call**
   (X, LinkedIn, Instagram, Facebook, TikTok, YouTube, Reddit, Telegram, Threads, Bluesky, …).
   `content.publish` (tier 3) returns an Ayrshare post id + per-venue results; `content.status`.
+- **Postiz** (self-host `base_url` + API key) — open-source, self-hostable multi-venue social publishing.
+- **Blotato** (API key) — multi-venue social publishing with flat pricing.
 
-For multi-venue publishing, **Ayrshare** is the easiest unified API that still delivers the
-capability; **Blotato** (flat pricing, native MCP) and open-source, self-hostable **Postiz** are
-the natural next adapters — all fit this same contract.
+All three social publishers fit the same contract; pick by hosting/pricing preference (Ayrshare = easiest unified API, Postiz = self-hostable OSS, Blotato = flat pricing).
 
 Licensed AGPL-3.0-or-later.
