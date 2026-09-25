@@ -1,0 +1,10 @@
+title = "ReDevOps gitleaks allowlist"
+# Keep ALL default gitleaks rules; suppress only the verified false positive below.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "tests/test_hubspot_adapter.py holds an EXPIRED free-trial HubSpot token used as a test fixture (no paid account; not a live credential)."
+paths = [
+  '''tests/test_hubspot_adapter\.py''',
+]
