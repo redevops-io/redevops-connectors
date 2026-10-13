@@ -145,4 +145,4 @@ OAuth2 or a private API key; the SDK handles both.
 
 All three social publishers fit the same contract; pick by hosting/pricing preference (Ayrshare = easiest unified API, Postiz = self-hostable OSS, Blotato = flat pricing).
 
-Licensed AGPL-3.0-or-later.
+Licensed AGPL-3.0-or-later with the Commons Clause (source-available; see [LICENSE.md](LICENSE.md)).
