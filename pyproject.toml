@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "ReDevOps Integration Plane — the IntegrationAdapter connector SDK: one contract, many governed provider adapters (OAuth/credentials via SecretRef), fixtures + conformance."
 readme = "README.md"
 requires-python = ">=3.10"
-license = "AGPL-3.0-or-later"
+license = { text = "AGPL-3.0-or-later WITH Commons-Clause" }
 dependencies = []  # the SDK core is stdlib-only; providers pull their own deps as extras
 
 [project.optional-dependencies]
