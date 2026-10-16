@@ -9,6 +9,7 @@ import pytest
 
 from redevops_connectors import FakeTransport, InMemorySecretResolver, Response, UnsupportedCapability
 from redevops_connectors.providers import WebAdapter
+from redevops_connectors.url_policy import UrlPolicy
 
 FIX = Path(__file__).resolve().parent.parent / "fixtures" / "web"
 KEY = "brave_test_token"
@@ -34,7 +35,8 @@ def transport():
 
 
 def _adapter(transport, resolver):
-    return WebAdapter(transport=transport, resolver=resolver, credential_ref="web:key")
+    pol = UrlPolicy(resolver=lambda host, port: ["93.184.216.34"])
+    return WebAdapter(transport=transport, resolver=resolver, credential_ref="web:key", fetch_policy=pol)
 
 
 def test_fetch_returns_page_content(transport, resolver):

@@ -12,6 +12,13 @@ Capabilities:
     ``X-Subscription-Token`` header) and return ``[{title, url, description}]``. Self-hostable /
     swappable via ``search_base``.
 
+``web.fetch`` is governed by a :class:`~redevops_connectors.url_policy.UrlPolicy` (secure by default: http(s)
+only, no credentials in the URL, private/loopback/link-local/metadata addresses refused after DNS resolution,
+redirects not followed, size/time limits, request-header allowlist). Pass ``fetch_policy=UrlPolicy(...)`` to opt
+in to e.g. an allowed-host list. With a ``UrllibTransport`` the fetch connects to the checked address; with any
+other transport the URL is validated (including resolution) and then delegated, with NO address pin and with
+redirect/proxy handling left to that transport; use ``GuardedTransport`` to keep the pin with a custom policy.
+
 Going live: pass a ``UrllibTransport``; for ``web.search`` put the search key behind a ``CredentialRef``
 (material ``{"api_key": "…"}``). ``web.fetch`` needs no credential. Tested against fixtures.
 """
@@ -28,7 +35,9 @@ from ..adapter import (
     ProviderHealth,
     ProviderResult,
 )
-from ..transport import Response, Transport, TransportTimeout
+from ..transport import Response, Transport, RedirectNotFollowed, TransportTimeout, UrllibTransport
+from ..url_policy import (FetchError, GuardedTransport, UrlPolicy, UrlPolicyError, filter_headers, safe_get,
+                          validate_url)
 from ..credentials import CredentialRef, SecretResolver
 
 BRAVE_SEARCH_BASE = "https://api.search.brave.com/res/v1"
@@ -39,8 +48,10 @@ class WebAdapter(BaseAdapter):
     provider = "web"
 
     def __init__(self, *, transport: Transport, resolver: SecretResolver,
-                 credential_ref: CredentialRef = "", search_base: Optional[str] = None) -> None:
+                 credential_ref: CredentialRef = "", search_base: Optional[str] = None,
+                 fetch_policy: Optional[UrlPolicy] = None) -> None:
         super().__init__(transport=transport, resolver=resolver, credential_ref=credential_ref)
+        self._fetch_policy = fetch_policy or UrlPolicy()
         self._search_base = (search_base or BRAVE_SEARCH_BASE).rstrip("/")
 
     def capabilities(self) -> Tuple[Capability, ...]:
@@ -66,11 +77,28 @@ class WebAdapter(BaseAdapter):
             if not url.startswith(("http://", "https://")):
                 return ProviderResult(ok=False, capability=capability.name,
                                       error="an http(s) url is required", retryable=False)
+            pol = self._fetch_policy
             try:
-                resp: Response = self._transport.request(
-                    "GET", url, headers={"User-Agent": "redevops-web/1.0", "Accept": "text/html,*/*"})
+                hdrs = filter_headers({"User-Agent": "redevops-web/1.0", "Accept": "text/html,*/*"}, pol)
+                if isinstance(self._transport, UrllibTransport):
+                    resp, _final = safe_get(url, policy=pol, headers=hdrs)
+                elif isinstance(self._transport, GuardedTransport):
+                    resp = self._transport.request("GET", url, headers=hdrs, timeout=pol.timeout_s)
+                else:
+                    resp = self._transport.request("GET", validate_url(url, pol), headers=hdrs, timeout=pol.timeout_s)
+            except RedirectNotFollowed as e:
+                return ProviderResult(ok=False, capability=capability.name, error="redirect not followed",
+                                      data={"status": e.status, "location": e.location}, retryable=False)
+            except (UrlPolicyError, UnicodeError) as e:
+                return ProviderResult(ok=False, capability=capability.name,
+                                      error=f"url not permitted: {e}", retryable=False)
+            except FetchError as e:
+                return ProviderResult(ok=False, capability=capability.name, error=str(e), retryable=e.retryable)
             except TransportTimeout:
                 return ProviderResult(ok=False, capability=capability.name, error="timeout", retryable=True)
+            if 300 <= resp.status < 400:
+                return ProviderResult(ok=False, capability=capability.name, error="redirect not followed",
+                                      data={"status": resp.status}, retryable=False)
             if resp.status >= 400:
                 return ProviderResult(ok=False, capability=capability.name,
                                       error=f"HTTP {resp.status}", retryable=resp.status >= 500)

@@ -127,7 +127,7 @@ redevops_connectors/
     ayrshare.py    publish to many venues in one call (API key)
     blotato.py     multi-venue social publishing, flat pricing (API key)
     apollo.py      cold-outreach sequences + contact/company enrichment (API key)
-    web.py         web.fetch (a public page) + web.search (research; Brave by default)
+    web.py         web.fetch (a public page, URL-policy guarded) + web.search (research; Brave by default)
 fixtures/<provider>/  canned provider responses for fixture-replay tests
 tests/             deterministic — FakeTransport + InMemorySecretResolver
 ```
@@ -179,7 +179,9 @@ OAuth2 or a private API key; the SDK handles both.
   contact/company **enrichment** (`contact.enrich` via `people/match`, `company.enrich` by domain — reads, no
   envelope; the returned PII/customer-content is classified on egress).
 - **Web** (`web.fetch` needs no key; `web.search` uses a Brave Search API key by default, swappable via
-  `search_base`) — the research half of the loop: `web.fetch` GETs a public page, `web.search` returns
+  `search_base`) — the research half of the loop: `web.fetch` GETs a public page under a URL policy (http(s) only, no URL credentials, private/loopback/link-local/metadata
+  addresses refused after DNS resolution and the connection pinned to the checked address, redirects off by default,
+  size/time limits, header allowlist; opt-ins such as allowed hosts via `UrlPolicy`; a redirect that is not followed is reported as an error carrying its `Location`, never as success). With `UrllibTransport` or `GuardedTransport` the connection is pinned; with any other transport (e.g. a fake) the URL is only validated, then delegated, and pinning/redirect/proxy behaviour is that transport's, `web.search` returns
   `{title, url, description}`. Both reads; the governed capability is what makes the external reach audited.
 
 All three social publishers fit the same contract; pick by hosting/pricing preference (Ayrshare = easiest unified API, Postiz = self-hostable OSS, Blotato = flat pricing).
