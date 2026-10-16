@@ -1,8 +1,47 @@
 # redevops-connectors
 
-[![License: AGPL-3.0 + Commons Clause](https://img.shields.io/badge/License-AGPL--3.0%20%2B%20Commons%20Clause-blue.svg)](LICENSE) [![NVIDIA Inception](https://img.shields.io/badge/NVIDIA-Inception%20Program%20Member-76B900.svg)](https://www.nvidia.com/en-us/startups/)
+[![License: AGPL-3.0 + Commons Clause](https://img.shields.io/badge/License-AGPL--3.0%20%2B%20Commons%20Clause-blue.svg)](LICENSE.md) [![NVIDIA Inception](https://img.shields.io/badge/NVIDIA-Inception%20Program%20Member-76B900.svg)](https://www.nvidia.com/en-us/startups/)
 
 > **🚀 NVIDIA Inception Program Member** — ReDevOps is a member of the NVIDIA Inception Program, supporting startups advancing AI and accelerated computing. Membership provides access to NVIDIA technology, technical resources, and the startup ecosystem. It does not imply product endorsement by NVIDIA.
+
+**What it does.** The ReDevOps Integration Plane connector SDK: one `IntegrationAdapter` contract and 14 provider adapters
+(CRM, billing, messaging, social publishing, outreach, web research). An adapter translates a logical Runtime operation
+(`chat.message.send`, `email.message.read`, ...) to and from a provider's API; it does not make governance decisions.
+
+**Who it's for.** Developers wiring a governed agent runtime to external providers. Its main consumer in this org is
+[`agentic-os`](https://github.com/redevops-io/agentic-os) (optional `connectors` and `projects` extras pin this repo at `v0.1.0`;
+`agentic_os/integrations/live.py` imports it lazily).
+
+**Maturity: alpha.** Version 0.1.0, one tag (`v0.1.0`). Adapters run only against canned fixtures in this repo; no live
+provider call is made by the tests. See [STATUS.md](STATUS.md).
+
+**Ownership, overlap and support status.** Owned by ReDevOps. Status: **active** (last commit 2026-10-13; 37 commits in the
+90 days before 2026-10-15, per the GitHub API). Not to be confused with
+[`redevops-integrations`](https://github.com/redevops-io/redevops-integrations), a framework/cloud conformance harness. See
+[OVERLAP](#overlap) below. Questions and bug reports go to GitHub Issues ([CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md)).
+
+**3-minute example** (only commands that exist in this repo; they are the ones CI runs, plus a single test file):
+
+```bash
+git clone https://github.com/redevops-io/redevops-connectors && cd redevops-connectors
+python -m pip install -e ".[dev]"            # stdlib-only core + pytest
+python -m pytest -q tests/test_slack_adapter.py tests/test_conformance.py   # one adapter + the conformance gate, fixtures only
+python -m pytest -q                          # everything (this is what CI runs)
+```
+
+There is no runnable live example in this repo: going live needs your own OAuth app / API keys (see "Going live" below).
+Locally, the two conformance/adapter test files above passed (11 tests) on 2026-10-15.
+
+**Evidence.** The test suite under [`tests/`](tests) and the canned responses under [`fixtures/`](fixtures); CI is
+[`.github/workflows/tests.yml`](.github/workflows/tests.yml). Classification: Internally reproduced (tests are deterministic
+and run in CI; no external reproduction).
+
+**Limitations.** Fixture-tested only; no live-provider validation is recorded in this repo. The package is not on PyPI; install from git.
+
+**Install note (verified against `pyproject.toml`).** The core has `dependencies = []` and the only extra is `dev` (pytest).
+The adapters import only the Python standard library, so all 14 ship in the base install; there are **no per-provider extras**
+today, despite the GitHub description saying "Providers install on demand" and the comment in `pyproject.toml` about
+providers pulling their own dependencies. A provider that needs a third-party package would add its own extra.
 
 The **ReDevOps Integration Plane connector SDK** — one `IntegrationAdapter` contract, many
 governed provider adapters. An adapter translates a logical Runtime operation
@@ -12,12 +51,12 @@ every call. The *reasoning* about which capabilities exist and how a request com
 the Runtime (the Connect Compiler manifest + wizard); this package is the **execution** half.
 
 > Not to be confused with `redevops-integrations`, which is a framework/hyperscaler
-> **benchmark** harness. This is the live connector SDK.
+> **conformance** harness. This is the connector SDK (fixture-tested; live use needs your own credentials).
 
 ## Design
 
-- **stdlib-only core.** No third-party dependency in the SDK; a provider pulls its own deps as
-  an extra. The base install ships contracts + lightweight definitions.
+- **stdlib-only core.** No third-party dependency in the SDK. Today every provider adapter is also stdlib-only, so there are
+  no per-provider extras (a future provider needing a third-party package would add one).
 - **Everything network-facing is behind a `Transport` seam.** Tests use `FakeTransport` with
   canned fixtures — **no network, no real credentials** — and go live by swapping in
   `UrllibTransport`. An adapter's logic (auth headers, request shape, error normalization) is
@@ -146,3 +185,17 @@ OAuth2 or a private API key; the SDK handles both.
 All three social publishers fit the same contract; pick by hosting/pricing preference (Ayrshare = easiest unified API, Postiz = self-hostable OSS, Blotato = flat pricing).
 
 Licensed AGPL-3.0-or-later with the Commons Clause (source-available; see [LICENSE.md](LICENSE.md)).
+
+## OVERLAP
+
+Several ReDevOps repositories sound alike. This table is identical in `redevops-connectors`, `redevops-integrations` and `agent-harness`.
+
+| Repo | Owns | Does not own | Licence file (see its own repo) |
+|---|---|---|---|
+| [`redevops-connectors`](https://github.com/redevops-io/redevops-connectors) | The `IntegrationAdapter` contract, OAuth/credential-reference plumbing, and 14 provider adapters (Gmail, Google Calendar, HubSpot, Stripe, Polar, Slack, WhatsApp Cloud API, WhatsApp via WAHA, Klaviyo, Postiz, Ayrshare, Blotato, Apollo, Web). Tested against canned fixtures only. | Governance decisions, Missions, framework benchmarks. | `LICENSE.md` (AGPL-3.0-or-later with Commons Clause) |
+| [`redevops-integrations`](https://github.com/redevops-io/redevops-integrations) | Eight framework/cloud conformance slices (NVIDIA NeMo, PydanticAI, LlamaIndex, CrewAI, Azure, Google, AWS, DigitalOcean) that wrap a real framework agent with the Mission SDK and classify native vs native+ReDevOps results. | The connector adapter contract, the Mission SDK itself. | Apache-2.0 |
+| [`agent-harness`](https://github.com/redevops-io/agent-harness) | Single-step agent building blocks: LLM client, tool registry, approval flow, sandbox, guardrails, eval harness. | Mission lifecycle, provider integrations, context planning. | AGPL-3.0 text (`LICENSE`) |
+| [`mission-sdk`](https://github.com/redevops-io/mission-sdk) | The `redevops-mission` package and `rdo` CLI: the developer-facing way to author and run governed Missions. | Provider adapters, framework conformance slices. | Apache-2.0 |
+| [`agentic-os`](https://github.com/redevops-io/agentic-os) | The control plane and Mission kernel, plus the reference apps; it is the main consumer of `redevops-connectors` (optional `connectors` / `projects` extras). | Connector contract source, SDK packaging. | See that repo |
+
+Common confusions: `redevops-connectors` is the live-adapter SDK, `redevops-integrations` is a conformance harness (not an adapter library), and `agent-harness` is not a Mission runtime. Do not `pip install agent-harness` from PyPI: that name belongs to an unrelated third-party project.
