@@ -16,7 +16,8 @@ Capabilities:
 only, no credentials in the URL, private/loopback/link-local/metadata addresses refused after DNS resolution,
 redirects not followed, size/time limits, request-header allowlist). Pass ``fetch_policy=UrlPolicy(...)`` to opt
 in to e.g. an allowed-host list. With a ``UrllibTransport`` the fetch connects to the checked address; with any
-other transport the URL is validated (including resolution) and the request is delegated to it.
+other transport the URL is validated (including resolution) and then delegated, with NO address pin and with
+redirect/proxy handling left to that transport; use ``GuardedTransport`` to keep the pin with a custom policy.
 
 Going live: pass a ``UrllibTransport``; for ``web.search`` put the search key behind a ``CredentialRef``
 (material ``{"api_key": "…"}``). ``web.fetch`` needs no credential. Tested against fixtures.
@@ -34,8 +35,8 @@ from ..adapter import (
     ProviderHealth,
     ProviderResult,
 )
-from ..transport import Response, Transport, TransportTimeout, UrllibTransport
-from ..url_policy import (FetchError, UrlPolicy, UrlPolicyError, filter_headers, safe_get,
+from ..transport import Response, Transport, RedirectNotFollowed, TransportTimeout, UrllibTransport
+from ..url_policy import (FetchError, GuardedTransport, UrlPolicy, UrlPolicyError, filter_headers, safe_get,
                           validate_url)
 from ..credentials import CredentialRef, SecretResolver
 
@@ -80,17 +81,24 @@ class WebAdapter(BaseAdapter):
             try:
                 hdrs = filter_headers({"User-Agent": "redevops-web/1.0", "Accept": "text/html,*/*"}, pol)
                 if isinstance(self._transport, UrllibTransport):
-                    resp, url = safe_get(url, policy=pol, headers=hdrs)
-                else:
-                    validate_url(url, pol)
+                    resp, _final = safe_get(url, policy=pol, headers=hdrs)
+                elif isinstance(self._transport, GuardedTransport):
                     resp = self._transport.request("GET", url, headers=hdrs, timeout=pol.timeout_s)
-            except UrlPolicyError as e:
+                else:
+                    resp = self._transport.request("GET", validate_url(url, pol), headers=hdrs, timeout=pol.timeout_s)
+            except RedirectNotFollowed as e:
+                return ProviderResult(ok=False, capability=capability.name, error="redirect not followed",
+                                      data={"status": e.status, "location": e.location}, retryable=False)
+            except (UrlPolicyError, UnicodeError) as e:
                 return ProviderResult(ok=False, capability=capability.name,
                                       error=f"url not permitted: {e}", retryable=False)
             except FetchError as e:
                 return ProviderResult(ok=False, capability=capability.name, error=str(e), retryable=e.retryable)
             except TransportTimeout:
                 return ProviderResult(ok=False, capability=capability.name, error="timeout", retryable=True)
+            if 300 <= resp.status < 400:
+                return ProviderResult(ok=False, capability=capability.name, error="redirect not followed",
+                                      data={"status": resp.status}, retryable=False)
             if resp.status >= 400:
                 return ProviderResult(ok=False, capability=capability.name,
                                       error=f"HTTP {resp.status}", retryable=resp.status >= 500)

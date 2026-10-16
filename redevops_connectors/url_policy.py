@@ -26,9 +26,9 @@ import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, FrozenSet, List, Mapping, Optional, Tuple
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
-from .transport import Response, TransportTimeout
+from .transport import RedirectNotFollowed, Response, TransportTimeout
 
 Resolver = Callable[[str, int], List[str]]
 
@@ -220,8 +220,13 @@ def parse_url(url: str, policy: UrlPolicy) -> _Target:
         raise UrlPolicyError(f"host {host!r} is denied")
     if policy.allowed_hosts and not _host_matches(host, policy.allowed_hosts):
         raise UrlPolicyError(f"host {host!r} is not on the allowlist")
-    path = sp.path or "/"
-    return _Target(scheme, host, port, path + (("?" + sp.query) if sp.query else ""), url)
+    path = quote(sp.path or "/", safe="/%:@!$&'()*+,;=-._~")
+    query = quote(sp.query, safe="/%:@!$&'()*+,;=-._~?")
+    target = path + (("?" + query) if query else "")
+    h = f"[{host}]" if ":" in host else host
+    default = 443 if scheme == "https" else 80
+    netloc_out = h if port == default else f"{h}:{port}"
+    return _Target(scheme, host, port, target, f"{scheme}://{netloc_out}{target}")
 
 
 def resolve_checked(t: _Target, policy: UrlPolicy) -> str:
@@ -248,8 +253,10 @@ def resolve_checked(t: _Target, policy: UrlPolicy) -> str:
 
 
 def validate_url(url: str, policy: UrlPolicy) -> str:
-    """Static + resolution checks. Returns the normalised URL's pinned IP."""
-    return resolve_checked(parse_url(url, policy), policy)
+    """Static + resolution checks. Returns the normalised (ASCII, percent-encoded, IDNA host) URL."""
+    t = parse_url(url, policy)
+    resolve_checked(t, policy)
+    return t.url
 
 
 def filter_headers(headers: Optional[Mapping[str, str]], policy: UrlPolicy) -> Dict[str, str]:
@@ -364,16 +371,36 @@ def safe_get(url: str, *, policy: UrlPolicy, headers: Optional[Mapping[str, str]
         status, location, body = _fetch_once(t, ip, hdrs, policy, deadline, ssl_context)
         if status in (301, 302, 303, 307, 308):
             if not policy.follow_redirects:
-                raise UrlPolicyError(f"redirects are not followed (HTTP {status})")
+                raise RedirectNotFollowed(status, location)
             if not location:
                 raise FetchError("redirect without Location")
-            nxt = parse_url(urljoin(t.url, location), policy)
+            try:
+                nxt = parse_url(urljoin(t.url, location), policy)
+            except UrlPolicyError:
+                raise RedirectNotFollowed(status, location) from None
             if nxt.host != origin:
-                raise UrlPolicyError("cross-host redirects are refused")
+                raise RedirectNotFollowed(status, location)
             if t.scheme == "https" and nxt.scheme != "https":
-                raise UrlPolicyError("redirect to a weaker scheme is refused")
+                raise RedirectNotFollowed(status, location)
             t = nxt
             continue
         text = body.decode("utf-8", errors="replace")
         return Response(status=status, text=text), t.url
     raise UrlPolicyError("too many redirects")
+
+
+class GuardedTransport:
+    """A ``Transport`` that performs every GET under a :class:`UrlPolicy` with the connection pinned to the
+    checked address. Use it where a non-default transport is wanted but the pin must be kept. GET only."""
+
+    def __init__(self, policy: Optional[UrlPolicy] = None) -> None:
+        self.policy = policy or UrlPolicy()
+
+    def request(self, method, url, *, headers=None, body=None, timeout=30.0) -> Response:
+        if method.upper() != "GET" or body is not None:
+            raise UrlPolicyError("only GET without a body is allowed")
+        pol = self.policy
+        if timeout < pol.timeout_s:
+            from dataclasses import replace
+            pol = replace(pol, timeout_s=timeout)
+        return safe_get(url, policy=pol, headers=headers)[0]

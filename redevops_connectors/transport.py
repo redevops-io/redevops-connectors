@@ -38,6 +38,16 @@ class TransportTimeout(Exception):
     """A request exceeded its timeout — normalized by adapters to a retryable failure."""
 
 
+class RedirectNotFollowed(Exception):
+    """A redirect the transport declined to follow (e.g. to another host). Never a success: carries the
+    status and the ``Location`` so a caller can decide explicitly."""
+
+    def __init__(self, status: int, location: str = "") -> None:
+        super().__init__(f"redirect (HTTP {status}) not followed")
+        self.status = status
+        self.location = location
+
+
 @dataclass
 class FakeTransport:
     """A deterministic transport for tests. Routes a request to a canned :class:`Response`
@@ -102,6 +112,8 @@ class UrllibTransport:
                 raw = fh.read().decode("utf-8")
                 status = fh.status
         except urllib.error.HTTPError as e:  # 4xx/5xx carry a body
+            if e.code in (301, 302, 303, 307, 308):
+                raise RedirectNotFollowed(e.code, e.headers.get("Location", "") if e.headers else "") from None
             raw = e.read().decode("utf-8") if e.fp else ""
             status = e.code
         except TimeoutError as e:  # noqa: F841

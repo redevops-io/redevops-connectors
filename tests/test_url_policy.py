@@ -9,8 +9,8 @@ import pytest
 
 from redevops_connectors import FakeTransport, InMemorySecretResolver, Response
 from redevops_connectors.providers import WebAdapter
-from redevops_connectors.transport import UrllibTransport
-from redevops_connectors.url_policy import (FetchError, UrlPolicy, UrlPolicyError, ip_block_reason,
+from redevops_connectors.transport import RedirectNotFollowed, UrllibTransport
+from redevops_connectors.url_policy import (FetchError, GuardedTransport, UrlPolicy, UrlPolicyError, ip_block_reason,
                                             safe_get, validate_url)
 
 PUBLIC = lambda host, port: ["93.184.216.34"]  # noqa: E731
@@ -138,8 +138,9 @@ def test_fetches_from_pinned_address_with_original_host(server):
 
 
 def test_redirects_not_followed_by_default(server):
-    with pytest.raises(UrlPolicyError):
+    with pytest.raises(RedirectNotFollowed) as ei:
         safe_get(f"http://local.test:{server.server_port}/redir-same", policy=_local(server))
+    assert ei.value.status == 302 and ei.value.location == "/ok"
     assert [p for p, _ in _H.seen] == ["/redir-same"]
 
 
@@ -150,7 +151,7 @@ def test_same_host_redirect_followed_when_enabled(server):
 
 
 def test_cross_host_redirect_refused_when_enabled(server):
-    with pytest.raises(UrlPolicyError):
+    with pytest.raises(RedirectNotFollowed):
         safe_get(f"http://local.test:{server.server_port}/redir-away",
                  policy=_local(server, follow_redirects=True))
 
@@ -204,9 +205,47 @@ def test_urllib_transport_does_not_forward_headers_across_hosts(server):
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), R)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
-        resp = UrllibTransport().request("GET", f"http://127.0.0.1:{srv.server_port}/",
-                                         headers={"Authorization": "Bearer t"})
-        assert resp.status == 302
+        with pytest.raises(RedirectNotFollowed) as ei:
+            UrllibTransport().request("GET", f"http://127.0.0.1:{srv.server_port}/",
+                                      headers={"Authorization": "Bearer t"})
+        assert ei.value.status == 302 and ei.value.location.endswith("/target")
         assert all(p != "/target" for p, _ in _H.seen)
     finally:
         srv.shutdown(); other.shutdown()
+
+
+def test_non_ascii_path_and_query_are_percent_encoded(server):
+    resp, final = safe_get(f"http://local.test:{server.server_port}/\u00e9?q=\u00fc", policy=_local(server))
+    assert resp.status == 200
+    assert _H.seen[-1][0] == "/%C3%A9?q=%C3%BC"
+
+
+def test_adapter_handles_non_ascii_urls_without_raising():
+    t = FakeTransport().route("GET", "xn--", Response(200, text="ok"))
+    a = WebAdapter(transport=t, resolver=InMemorySecretResolver(), fetch_policy=_pol())
+    r = a.execute("web.fetch", {"url": "https://b\u00fccher.test/\u00e9"}, None)
+    assert r.ok and t.calls[0]["url"] == "https://xn--bcher-kva.test/%C3%A9"
+    r = a.execute("web.fetch", {"url": "https://\u2603\ud800.test/"}, None)
+    assert not r.ok and r.retryable is False
+
+
+def test_adapter_reports_redirect_as_typed_error(server):
+    a = WebAdapter(transport=UrllibTransport(), resolver=InMemorySecretResolver(), fetch_policy=_local(server))
+    r = a.execute("web.fetch", {"url": f"http://local.test:{server.server_port}/redir-away"}, None)
+    assert not r.ok and r.error == "redirect not followed" and r.data["status"] == 302
+
+
+def test_guarded_transport_keeps_the_pin(server):
+    a = WebAdapter(transport=GuardedTransport(_local(server)), resolver=InMemorySecretResolver(),
+                   fetch_policy=_local(server))
+    assert a.execute("web.fetch", {"url": f"http://local.test:{server.server_port}/"}, None).ok
+    b = WebAdapter(transport=GuardedTransport(_pol()), resolver=InMemorySecretResolver())
+    r = b.execute("web.fetch", {"url": f"http://127.0.0.1:{server.server_port}/"}, None)
+    assert not r.ok and "not permitted" in r.error
+
+
+def test_adapter_treats_a_3xx_from_any_transport_as_not_successful():
+    t = FakeTransport().route("GET", "https://x.test", Response(302, text=""))
+    a = WebAdapter(transport=t, resolver=InMemorySecretResolver(), fetch_policy=_pol())
+    r = a.execute("web.fetch", {"url": "https://x.test/"}, None)
+    assert not r.ok and r.error == "redirect not followed"
