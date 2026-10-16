@@ -11,6 +11,7 @@ from __future__ import annotations
 import json as _json
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 from dataclasses import dataclass, field
 from typing import Dict, List, Mapping, Optional, Protocol, Tuple
 
@@ -66,6 +67,21 @@ class FakeTransport:
         return Response(status=404, text=f"no fake route for {method} {url}")
 
 
+class _SameHostRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect only to the same host and never to a weaker scheme, so credentials sent in
+    headers are not forwarded elsewhere. Otherwise the 3xx is returned to the caller as-is."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old, new = urlsplit(req.full_url), urlsplit(newurl)
+        if (old.hostname or "").lower() != (new.hostname or "").lower() or \
+                (old.scheme == "https" and new.scheme != "https"):
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_OPENER = urllib.request.build_opener(_SameHostRedirects)
+
+
 @dataclass
 class UrllibTransport:
     """The live transport (stdlib ``urllib``). Not exercised in CI."""
@@ -82,7 +98,7 @@ class UrllibTransport:
         for k, v in (headers or {}).items():
             req.add_header(k, v)
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as fh:
+            with _OPENER.open(req, timeout=timeout) as fh:
                 raw = fh.read().decode("utf-8")
                 status = fh.status
         except urllib.error.HTTPError as e:  # 4xx/5xx carry a body
