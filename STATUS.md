@@ -22,6 +22,6 @@
 ## Known issues
 
 - The GitHub description says "Providers install on demand"; packaging has no per-provider extras (see above).
-- Licence labelling differs between GitHub (shows AGPL-3.0) and `LICENSE.md` (see the PR notes for counsel); this file gives no legal conclusion.
+- Licence: see `LICENSE.md`.
 
 Related repositories and what each owns: see the OVERLAP section of [README.md](README.md#overlap).
