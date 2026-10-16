@@ -28,9 +28,7 @@ whose value derives entirely or substantially from it.
 
 ## Note on this file
 
-The licence intent was inferred from the repository's README badge
-(AGPL-3.0 + Commons Clause) and is pending confirmation by the owner. Any
-earlier versions of this repository were not covered by this file and are not
+Earlier versions of this repository were not covered by this file and are not
 affected retroactively by it.
 
 This file states the terms. It is not legal advice.
