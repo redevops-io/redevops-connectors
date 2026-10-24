@@ -12,6 +12,14 @@ Capabilities:
   * ``email.message.read`` (tier 1) — ``GET users/me/messages?q=…`` lists matching message
     ids (Gmail search syntax in ``q``); a caller can then fetch each one.
 
+``email.message.send`` accepts an optional ``message_id`` (``<local@domain>``, RFC 5322 msg-id
+syntax). It becomes the message's ``Message-ID`` header. Gmail's documentation does not say that a
+client-supplied ``Message-ID`` is kept, so nothing here relies on it: its purpose is that a caller
+who does not learn the assigned ``id`` (a timeout after the request was written) can later search
+``rfc822msgid:`` and CHECK THE STORED MESSAGE'S OWN HEADER (agentic-os's Gmail reconciliation probe
+does). A value that is not a valid msg-id is refused before anything is sent, so it cannot be used
+to inject headers. The caller should make it unique per intended message.
+
 ``observe(message_id)`` re-fetches ``GET users/me/messages/{id}`` to confirm the message id
 round-trips.
 
@@ -24,6 +32,7 @@ Nothing here calls Gmail until then.
 from __future__ import annotations
 
 import base64
+import re
 import urllib.parse
 from email.message import EmailMessage
 from typing import Any, Dict, Mapping, Optional, Tuple
@@ -48,12 +57,34 @@ GMAIL_SCOPES: Tuple[str, ...] = (
 )
 
 
+# RFC 5322 msg-id: "<" id-left "@" id-right ">", restricted here to the dot-atom characters (no quoted
+# strings, no comments, no folding) so nothing in it can end the header or start another.
+_MSG_ID = re.compile(r"^<[A-Za-z0-9!#$%&'*+/=?^_`{|}~.\-]+@[A-Za-z0-9.\-]+>$")
+
+
+def normalize_message_id(value: Any) -> Optional[str]:
+    """``<local@domain>`` for a valid msg-id (angle brackets added if absent), ``None`` if there is none requested,
+    and ``ValueError`` for anything that is not a plain msg-id (whitespace, CR/LF, a second ``@``, brackets inside)."""
+    if value is None or value == "":
+        return None
+    text = str(value).strip()
+    if not text.startswith("<"):
+        text = f"<{text}>"
+    if len(text) > 200 or not _MSG_ID.match(text):
+        raise ValueError("message_id must be a plain RFC 5322 msg-id like <unique@example.com>")
+    return text
+
+
 def _build_raw(request: Mapping[str, Any]) -> str:
     """An RFC 2822 message (To/Subject/body) as a base64url string, as Gmail's ``raw`` wants.
-    Gmail fills ``From`` from the authenticated user, so it is left unset here."""
+    Gmail fills ``From`` from the authenticated user, so it is left unset here. A requested
+    ``message_id`` is set as the ``Message-ID`` header (see the module docstring)."""
     msg = EmailMessage()
     msg["To"] = str(request.get("to", ""))
     msg["Subject"] = str(request.get("subject", ""))
+    mid = normalize_message_id(request.get("message_id"))
+    if mid:
+        msg["Message-ID"] = mid
     msg.set_content(str(request.get("body", "")))
     return base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")
 
@@ -87,8 +118,11 @@ class GmailAdapter(GoogleBearerAdapter):
     def _do_execute(self, capability: Capability, request: Dict[str, Any],
                     envelope: Optional[object]) -> ProviderResult:
         if capability.name == "email.message.send":
-            status, data, err = self._post(_API + "users/me/messages/send",
-                                           {"raw": _build_raw(request)})
+            try:
+                raw = _build_raw(request)
+            except ValueError as e:                  # refused BEFORE anything is sent: no effect to reconcile, and not worth retrying
+                return ProviderResult(ok=False, capability=capability.name, error=str(e), retryable=False)
+            status, data, err = self._post(_API + "users/me/messages/send", {"raw": raw})
             if err:
                 return ProviderResult(ok=False, capability=capability.name, error=err, retryable=True)
             gerr = google_error_message(data)
@@ -98,7 +132,8 @@ class GmailAdapter(GoogleBearerAdapter):
                                       retryable=status == 429 or status >= 500)
             mid = str(data.get("id", ""))  # assigned id; none -> "" (observe will be found=False)
             return ProviderResult(ok=True, capability=capability.name, provider_object_id=mid,
-                                  data={"id": mid, "threadId": str(data.get("threadId", ""))})
+                                  data={"id": mid, "threadId": str(data.get("threadId", "")),
+                                        **({"requested_message_id": normalize_message_id(request.get("message_id"))} if request.get("message_id") else {})})
 
         if capability.name == "email.message.read":
             q = str(request.get("q", ""))
