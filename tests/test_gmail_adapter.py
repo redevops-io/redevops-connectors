@@ -123,3 +123,47 @@ def test_gmail_passes_conformance(transport, resolver):
                              write_request=_SEND, observe_ref="MSG01")
     report = run_conformance(_adapter(transport, resolver), probe=probe, resolver=resolver)
     assert report.passed, [c.name for c in report.failures()]
+
+
+# ───────────────────────── a caller-supplied Message-ID ─────────────────────────
+def _sent_raw(transport) -> str:
+    import base64
+    call = next(c for c in transport.calls if "messages/send" in c["url"])
+    raw = json.loads(call["body"])["raw"]
+    return base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode()
+
+
+def test_a_requested_message_id_becomes_the_message_id_header(transport, resolver):
+    r = _adapter(transport, resolver).execute("email.message.send", {**_SEND, "message_id": "<req-77@redevops.example>"}, envelope=object())
+    assert r.ok and "Message-ID: <req-77@redevops.example>" in _sent_raw(transport)
+    assert r.data["requested_message_id"] == "<req-77@redevops.example>" and r.provider_object_id == "MSG01"
+
+
+def test_angle_brackets_are_added_when_the_caller_leaves_them_out(transport, resolver):
+    _adapter(transport, resolver).execute("email.message.send", {**_SEND, "message_id": "req-78@redevops.example"}, envelope=object())
+    assert "Message-ID: <req-78@redevops.example>" in _sent_raw(transport)
+
+
+def test_without_a_message_id_no_header_is_set_and_nothing_else_changes(transport, resolver):
+    r = _adapter(transport, resolver).execute("email.message.send", _SEND, envelope=object())
+    assert "Message-ID" not in _sent_raw(transport) and "requested_message_id" not in r.data
+
+
+@pytest.mark.parametrize("bad", ["x@y.com\r\nBcc: attacker@evil.example", "a b@c.com", "no-at-sign", "<a@b>@c.com", "<a@b.com><c@d.com>", "a@b.com\nX: y", "<>", "@x.com", "a@", "x" * 300 + "@y.com",
+                                 "<a@b.com> ", "a@b.com; rm -rf /"])
+def test_a_message_id_that_could_inject_a_header_is_refused_before_anything_is_sent(transport, resolver, bad):
+    r = _adapter(transport, resolver).execute("email.message.send", {**_SEND, "message_id": bad}, envelope=object())
+    if bad.strip() == "<a@b.com>":
+        assert r.ok                                     # surrounding whitespace is stripped: this one is a valid msg-id
+        return
+    assert not r.ok and not r.retryable and "msg-id" in r.error
+    assert not [c for c in transport.calls if "messages/send" in c["url"]]
+
+
+def test_the_message_id_validator_accepts_ordinary_ids_and_rejects_the_rest():
+    from redevops_connectors.providers.gmail import normalize_message_id as n
+    assert n(None) is None and n("") is None
+    assert n("abc.123+tag@mail.example.com") == "<abc.123+tag@mail.example.com>" and n("  a@b.com\n") == "<a@b.com>"      # surrounding whitespace is stripped
+    for bad in ("a@b c", "a@b\nc", "<a@b>c", "a@b\r\nBcc: x@y.z"):
+        with pytest.raises(ValueError):
+            n(bad)
