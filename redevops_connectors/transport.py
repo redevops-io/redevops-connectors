@@ -8,6 +8,7 @@ tested deterministically, and going live is a one-line swap.
 """
 from __future__ import annotations
 
+import http.client
 import json as _json
 import urllib.error
 import urllib.request
@@ -77,14 +78,33 @@ class FakeTransport:
         return Response(status=404, text=f"no fake route for {method} {url}")
 
 
+def _port(u) -> int:
+    try:
+        return u.port or (443 if u.scheme == "https" else 80)
+    except ValueError:
+        return -1
+
+
+def same_service(old_url: str, new_url: str) -> bool:
+    """Whether a redirect stays with the service the request (and its credentials) was meant for: the same host AND the same port,
+    never a weaker scheme. Another port on the same host is another service. The one change of port allowed is the upgrade from
+    http on 80 to https on 443."""
+    old, new = urlsplit(old_url), urlsplit(new_url)
+    if new.scheme not in ("http", "https") or (old.hostname or "").lower() != (new.hostname or "").lower():
+        return False
+    if old.scheme == "https" and new.scheme != "https":
+        return False
+    if _port(old) == _port(new):
+        return True
+    return old.scheme == "http" and new.scheme == "https" and (_port(old), _port(new)) == (80, 443)
+
+
 class _SameHostRedirects(urllib.request.HTTPRedirectHandler):
-    """Follow a redirect only to the same host and never to a weaker scheme, so credentials sent in
-    headers are not forwarded elsewhere. Otherwise the 3xx is returned to the caller as-is."""
+    """Follow a redirect only within the same service (see :func:`same_service`), so credentials sent in headers are not forwarded
+    elsewhere. Otherwise the 3xx is returned to the caller as-is."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        old, new = urlsplit(req.full_url), urlsplit(newurl)
-        if (old.hostname or "").lower() != (new.hostname or "").lower() or \
-                (old.scheme == "https" and new.scheme != "https"):
+        if not same_service(req.full_url, newurl):
             return None
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -92,9 +112,33 @@ class _SameHostRedirects(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_SameHostRedirects)
 
 
+class _TooLarge(Exception):
+    pass
+
+
+def _read_text(fh) -> str:
+    """The body as text: at most MAX_RESPONSE_BYTES, and bytes that are not UTF-8 are replaced, not raised."""
+    data = fh.read(MAX_RESPONSE_BYTES + 1)
+    if len(data) > MAX_RESPONSE_BYTES:
+        raise _TooLarge()
+    return data.decode("utf-8", errors="replace")
+
+
+#: The status a caller sees when no HTTP response was received at all (connection refused, DNS failure, TLS failure, a reset).
+#: Not a status any provider sent: 599 is outside the registered range on purpose, and ``text`` says what happened.
+NO_RESPONSE_STATUS = 599
+#: The most a response body may be. A provider API answer is small; anything larger is cut off and treated as a failure.
+MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+
+
 @dataclass
 class UrllibTransport:
-    """The live transport (stdlib ``urllib``). Not exercised in CI."""
+    """The live transport (stdlib ``urllib``). Its failure paths are tested against local sockets (tests/test_urllib_transport.py);
+    no provider is contacted in CI.
+
+    A request always ends in a :class:`Response`, a :class:`TransportTimeout` or a :class:`RedirectNotFollowed`. A connection that
+    could not be made is a ``Response`` with ``status`` :data:`NO_RESPONSE_STATUS` (adapters already treat a 5xx as a retryable
+    failure), never a raw ``urllib`` exception that no adapter catches."""
 
     #: Sent unless the adapter supplies its own. The stdlib default (``Python-urllib/x``)
     #: is blocked by Cloudflare-fronted APIs (e.g. Polar) with a 403, so give a real one.
@@ -109,15 +153,26 @@ class UrllibTransport:
             req.add_header(k, v)
         try:
             with _OPENER.open(req, timeout=timeout) as fh:
-                raw = fh.read().decode("utf-8")
+                raw = _read_text(fh)
                 status = fh.status
         except urllib.error.HTTPError as e:  # 4xx/5xx carry a body
             if e.code in (301, 302, 303, 307, 308):
                 raise RedirectNotFollowed(e.code, e.headers.get("Location", "") if e.headers else "") from None
-            raw = e.read().decode("utf-8") if e.fp else ""
+            try:
+                raw = _read_text(e) if e.fp else ""
+            except _TooLarge:
+                raw = ""
             status = e.code
-        except TimeoutError as e:  # noqa: F841
+        except _TooLarge:
+            return Response(status=NO_RESPONSE_STATUS, text=f"transport failure: the response is larger than {MAX_RESPONSE_BYTES} bytes")
+        except TimeoutError:
             raise TransportTimeout(url) from None
+        except urllib.error.URLError as e:
+            if isinstance(e.reason, TimeoutError):          # a connect or read timeout arrives wrapped
+                raise TransportTimeout(url) from None
+            return Response(status=NO_RESPONSE_STATUS, text=f"transport failure: no response ({type(e.reason).__name__ if isinstance(e.reason, BaseException) else 'URLError'})")
+        except (OSError, http.client.HTTPException) as e:   # a reset or a malformed response while reading
+            return Response(status=NO_RESPONSE_STATUS, text=f"transport failure: no usable response ({type(e).__name__})")
         parsed: Optional[dict] = None
         try:
             obj = _json.loads(raw)
