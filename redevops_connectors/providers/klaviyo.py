@@ -21,6 +21,7 @@ from __future__ import annotations
 import json as _json
 from typing import Any, Dict, Mapping, Optional, Tuple
 
+from ..base_url import path_segment
 from ..adapter import (
     BaseAdapter,
     Capability,
@@ -107,7 +108,7 @@ class KlaviyoAdapter(BaseAdapter):
     def observe(self, resource_ref: str) -> Observation:
         if not resource_ref:
             return Observation(resource_ref=resource_ref, found=False)
-        status, data, err = self._get(f"profiles/{resource_ref}")
+        status, data, err = self._get(f"profiles/{path_segment(resource_ref)}")
         found = not err and status < 400 and str(data.get("data", {}).get("id", "")) == resource_ref
         return Observation(resource_ref=resource_ref, data=data if found else {}, found=found)
 

@@ -38,6 +38,7 @@ from __future__ import annotations
 import json as _json
 from typing import Any, Dict, Mapping, Optional, Set, Tuple
 
+from ..base_url import path_segment
 from ..adapter import (
     BaseAdapter,
     Capability,
@@ -84,7 +85,7 @@ class WhatsAppAdapter(BaseAdapter):
         # GET /{phone_number_id}?fields=display_phone_number,verified_name verifies both
         # the token AND the number id in one call.
         status, data, err = self._get(
-            f"{self._phone_number_id}?fields=display_phone_number,verified_name",
+            f"{path_segment(self._phone_number_id)}?fields=display_phone_number,verified_name",
             credential_ref=credential_ref)
         graph_err = _graph_error(data)
         if err or status >= 400 or graph_err:
@@ -99,7 +100,7 @@ class WhatsAppAdapter(BaseAdapter):
         if not self._phone_number_id:
             return ProviderHealth(healthy=False, detail="phone_number_id required")
         status, data, err = self._get(
-            f"{self._phone_number_id}?fields=display_phone_number,verified_name")
+            f"{path_segment(self._phone_number_id)}?fields=display_phone_number,verified_name")
         graph_err = _graph_error(data)
         healthy = not err and status < 400 and not graph_err
         return ProviderHealth(healthy=healthy, detail=err or graph_err or ("ok" if healthy else f"http {status}"))
@@ -117,7 +118,7 @@ class WhatsAppAdapter(BaseAdapter):
                 "type": "text",
                 "text": {"body": request.get("text", "")},
             }
-            status, data, err = self._post(f"{self._phone_number_id}/messages", body)
+            status, data, err = self._post(f"{path_segment(self._phone_number_id)}/messages", body)
             if err:  # transport timeout — normalized to a retryable failure
                 return ProviderResult(ok=False, capability=capability.name, error=err, retryable=True)
             graph_err = _graph_error(data)

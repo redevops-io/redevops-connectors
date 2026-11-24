@@ -36,6 +36,7 @@ from ..adapter import (
     ProviderResult,
 )
 from ..transport import Response, Transport, RedirectNotFollowed, TransportTimeout, UrllibTransport
+from ..base_url import credential_base
 from ..url_policy import (FetchError, GuardedTransport, UrlPolicy, UrlPolicyError, filter_headers, safe_get,
                           validate_url)
 from ..credentials import CredentialRef, SecretResolver
@@ -52,7 +53,7 @@ class WebAdapter(BaseAdapter):
                  fetch_policy: Optional[UrlPolicy] = None) -> None:
         super().__init__(transport=transport, resolver=resolver, credential_ref=credential_ref)
         self._fetch_policy = fetch_policy or UrlPolicy()
-        self._search_base = (search_base or BRAVE_SEARCH_BASE).rstrip("/")
+        self._search_base = credential_base(search_base or BRAVE_SEARCH_BASE, what="search_base")
 
     def capabilities(self) -> Tuple[Capability, ...]:
         return (
@@ -63,7 +64,7 @@ class WebAdapter(BaseAdapter):
     # ── connection / health (stateless; web.fetch needs no account) ──────────────
     def connect(self, config: Mapping[str, Any], credential_ref: str) -> ConnectionState:
         if config.get("search_base"):
-            self._search_base = str(config["search_base"]).rstrip("/")
+            self._search_base = credential_base(config["search_base"], what="search_base")
         return ConnectionState(provider=self.provider, connected=True, detail="stateless")
 
     def health(self) -> ProviderHealth:

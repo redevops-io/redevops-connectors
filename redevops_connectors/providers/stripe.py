@@ -25,6 +25,7 @@ from __future__ import annotations
 import urllib.parse
 from typing import Any, Dict, Mapping, Optional, Tuple
 
+from ..base_url import path_segment
 from ..adapter import (
     BaseAdapter,
     Capability,
@@ -66,7 +67,7 @@ class StripeAdapter(BaseAdapter):
                     envelope: Optional[object]) -> ProviderResult:
         if capability.name == "billing.charge.find":
             charge_id = str(request.get("charge_id") or request.get("charge") or request.get("id") or "")
-            status, data, err = self._get(f"charges/{charge_id}")
+            status, data, err = self._get(f"charges/{path_segment(charge_id)}")
             if err:
                 return ProviderResult(ok=False, capability=capability.name, error=err, retryable=True)
             if status < 400 and str(data.get("id", "")) == charge_id:
@@ -111,7 +112,7 @@ class StripeAdapter(BaseAdapter):
     def observe(self, resource_ref: str) -> Observation:
         if not resource_ref:
             return Observation(resource_ref=resource_ref, found=False)
-        status, data, err = self._get(f"refunds/{resource_ref}")
+        status, data, err = self._get(f"refunds/{path_segment(resource_ref)}")
         found = not err and status < 400 and str(data.get("id", "")) == resource_ref
         return Observation(resource_ref=resource_ref, data=data if found else {}, found=found)
 

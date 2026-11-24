@@ -28,6 +28,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Optional, Tuple
 
+from ..base_url import path_segment
 from ..adapter import (
     BaseAdapter,
     Capability,
@@ -124,7 +125,7 @@ class HubSpotAdapter(BaseAdapter):
     def observe(self, resource_ref: str) -> Observation:
         if not resource_ref:
             return Observation(resource_ref=resource_ref, found=False)
-        status, data, err = self._get(f"contacts/{resource_ref}", {})
+        status, data, err = self._get(f"contacts/{path_segment(resource_ref)}", {})
         found = not err and status < 400 and str(data.get("id", "")) == resource_ref
         return Observation(resource_ref=resource_ref, data=data if found else {}, found=found)
 

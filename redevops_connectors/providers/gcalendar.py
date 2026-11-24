@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
+from ..base_url import path_segment
 from ..adapter import (
     Capability,
     ConnectionState,
@@ -129,6 +130,6 @@ class GoogleCalendarAdapter(GoogleBearerAdapter):
     def observe(self, resource_ref: str) -> Observation:
         if not resource_ref:
             return Observation(resource_ref=resource_ref, found=False)
-        status, data, err = self._get(_API + f"calendars/primary/events/{resource_ref}")
+        status, data, err = self._get(_API + f"calendars/primary/events/{path_segment(resource_ref)}")
         found = not err and status < 400 and str(data.get("id", "")) == resource_ref
         return Observation(resource_ref=resource_ref, data=data if found else {}, found=found)

@@ -30,6 +30,7 @@ from __future__ import annotations
 import json as _json
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
+from ..base_url import path_segment
 from ..adapter import (
     BaseAdapter,
     Capability,
@@ -113,7 +114,7 @@ class BlotatoAdapter(BaseAdapter):
     def _status(self, submission_id: str, capability: str) -> ProviderResult:
         if not submission_id:
             return ProviderResult(ok=False, capability=capability, error="missing postSubmissionId")
-        status, data, err = self._get(f"posts/{submission_id}")
+        status, data, err = self._get(f"posts/{path_segment(submission_id)}")
         if err:
             return ProviderResult(ok=False, capability=capability, error=err, retryable=True)
         found = status < 400 and bool(data.get("status"))
@@ -128,7 +129,7 @@ class BlotatoAdapter(BaseAdapter):
     def observe(self, resource_ref: str) -> Observation:
         if not resource_ref:
             return Observation(resource_ref=resource_ref, found=False)
-        status, data, err = self._get(f"posts/{resource_ref}")
+        status, data, err = self._get(f"posts/{path_segment(resource_ref)}")
         found = not err and status < 400 and bool(data.get("status"))
         return Observation(resource_ref=resource_ref, data=data if found else {}, found=found)
 
