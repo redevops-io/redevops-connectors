@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Optional, Protocol, Tuple
 
+from .base_url import PathSegmentError
 from .credentials import CredentialRef, SecretResolver
 from .transport import Transport
 
@@ -145,7 +146,26 @@ class BaseAdapter:
                 ok=False, capability=capability,
                 error="execution envelope required for a consequential (write) capability",
                 retryable=False)
-        return self._do_execute(cap, dict(request), envelope)
+        try:
+            return self._do_execute(cap, dict(request), envelope)
+        except PathSegmentError as e:      # an id that cannot be one segment of a request path: no request was made
+            return ProviderResult(ok=False, capability=capability, error=f"invalid identifier: {e}", retryable=False)
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """A provider's ``observe`` answers "not found" for a reference that cannot be one segment of a request path, as it does
+        for any reference the provider does not know; nothing is sent."""
+        super().__init_subclass__(**kwargs)
+        own = cls.__dict__.get("observe")
+        if own is None:
+            return
+
+        def observe(self, resource_ref: str, _own=own) -> Observation:
+            try:
+                return _own(self, resource_ref)
+            except PathSegmentError:
+                return Observation(resource_ref=resource_ref, data={}, found=False)
+        observe.__doc__, observe.__name__, observe.__qualname__ = own.__doc__, "observe", own.__qualname__
+        cls.observe = observe
 
     # ── provider hooks ──────────────────────────────────────────────────────────
     def _do_execute(self, capability: Capability, request: Dict[str, Any],

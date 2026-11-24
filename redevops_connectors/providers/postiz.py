@@ -37,6 +37,7 @@ import json as _json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
+from ..base_url import credential_base
 from ..adapter import (
     BaseAdapter,
     Capability,
@@ -52,8 +53,8 @@ POSTIZ_PUBLIC_API = "https://api.postiz.com/public/v1/"
 
 
 def _normalize_base(url: str) -> str:
-    """A single trailing slash so paths append cleanly."""
-    return url.rstrip("/") + "/"
+    """Checked as the address the key is sent to, with a single trailing slash so paths append cleanly."""
+    return credential_base(url, what="base_url") + "/"
 
 
 class PostizAdapter(BaseAdapter):

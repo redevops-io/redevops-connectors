@@ -22,6 +22,7 @@ from __future__ import annotations
 import json as _json
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
+from ..base_url import path_segment
 from ..adapter import (
     BaseAdapter,
     Capability,
@@ -90,7 +91,7 @@ class AyrshareAdapter(BaseAdapter):
         return ProviderResult(ok=False, capability=capability.name, error="unhandled capability")
 
     def _status(self, post_id: str, capability: str) -> ProviderResult:
-        status, data, err = self._get(f"post/{post_id}")
+        status, data, err = self._get(f"post/{path_segment(post_id)}")
         if err:
             return ProviderResult(ok=False, capability=capability, error=err, retryable=True)
         found = status < 400 and bool(data.get("id"))
@@ -99,7 +100,7 @@ class AyrshareAdapter(BaseAdapter):
 
     # ── observe (re-fetch the Ayrshare post by id) ──────────────────────────────
     def observe(self, resource_ref: str) -> Observation:
-        status, data, err = self._get(f"post/{resource_ref}")
+        status, data, err = self._get(f"post/{path_segment(resource_ref)}")
         found = not err and status < 400 and str(data.get("id", "")) == resource_ref
         return Observation(resource_ref=resource_ref, data=data if found else {}, found=found)
 

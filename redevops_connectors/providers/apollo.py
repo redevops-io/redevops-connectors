@@ -43,6 +43,7 @@ import json as _json
 from typing import Any, Dict, Mapping, Optional, Tuple
 from urllib.parse import quote
 
+from ..base_url import path_segment
 from ..adapter import (
     BaseAdapter,
     Capability,
@@ -219,7 +220,7 @@ class ApolloAdapter(BaseAdapter):
         subject = request.get("subject", "")
         body_html = request.get("body_html", "")
         t_status, t_data, t_err = self._put(
-            f"/emailer_templates/{template_id}",
+            f"/emailer_templates/{path_segment(template_id)}",
             {"subject": subject, "body_html": body_html})
         if t_err:
             return ProviderResult(ok=False, capability=capability.name, error=t_err, retryable=True)
@@ -249,7 +250,7 @@ class ApolloAdapter(BaseAdapter):
             "send_email_from_email_account_id": self._sender_account_id,
             "sequence_active": True,
         }
-        status, data, err = self._post(f"/emailer_campaigns/{sequence_id}/add_contact_ids", body)
+        status, data, err = self._post(f"/emailer_campaigns/{path_segment(sequence_id)}/add_contact_ids", body)
         if err:
             return ProviderResult(ok=False, capability=capability.name, error=err, retryable=True)
         if status in (200, 201):
@@ -278,7 +279,7 @@ class ApolloAdapter(BaseAdapter):
     def observe(self, resource_ref: str) -> Observation:
         if not resource_ref:
             return Observation(resource_ref=resource_ref, found=False)
-        status, data, err = self._get(f"/contacts/{resource_ref}")
+        status, data, err = self._get(f"/contacts/{path_segment(resource_ref)}")
         contact = data.get("contact") if isinstance(data, dict) else None
         if err or status >= 400 or not isinstance(contact, dict):
             return Observation(resource_ref=resource_ref, found=False)

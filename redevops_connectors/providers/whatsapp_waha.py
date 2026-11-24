@@ -28,6 +28,7 @@ import json as _json
 from typing import Any, Dict, Mapping, Optional, Tuple
 from urllib.parse import quote
 
+from ..base_url import credential_base
 from ..adapter import (
     BaseAdapter,
     Capability,
@@ -43,7 +44,7 @@ _DEFAULT_BASE = "http://localhost:3000"
 
 
 def _normalize_base(url: str) -> str:
-    return url.rstrip("/")
+    return credential_base(url, what="base_url")
 
 
 def _chat_id(value: str) -> str:

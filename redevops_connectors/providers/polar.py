@@ -21,6 +21,7 @@ import json as _json
 import urllib.parse
 from typing import Any, Dict, Mapping, Optional, Tuple
 
+from ..base_url import path_segment
 from ..adapter import (
     BaseAdapter,
     Capability,
@@ -74,7 +75,7 @@ class PolarAdapter(BaseAdapter):
         if capability.name == "billing.order.find":
             oid = request.get("id", "")
             if oid:
-                status, data, err = self._get(f"/v1/orders/{oid}", {})
+                status, data, err = self._get(f"/v1/orders/{path_segment(oid)}", {})
             else:
                 q = {"limit": "1"}
                 if self._org:
@@ -112,7 +113,7 @@ class PolarAdapter(BaseAdapter):
         return ProviderResult(ok=False, capability=capability.name, error="unhandled capability")
 
     def observe(self, resource_ref: str) -> Observation:
-        status, data, err = self._get(f"/v1/refunds/{resource_ref}", {})
+        status, data, err = self._get(f"/v1/refunds/{path_segment(resource_ref)}", {})
         found = not err and status < 400 and str(data.get("id", "")) == resource_ref
         return Observation(resource_ref=resource_ref, data=data if found else {}, found=found)
 
