@@ -32,6 +32,8 @@ covers that case so WhatsApp reuses this module rather than a bespoke path.
 """
 from __future__ import annotations
 
+import html
+import ipaddress
 import secrets
 import threading
 import time
@@ -111,13 +113,14 @@ def _make_handler(path: str, box: Dict[str, str], provider: str):
                 return
             q = urllib.parse.parse_qs(parsed.query)
             if "error" in q:
-                box["error"] = q.get("error_description", q["error"])[0]
-                self._reply(400, _FAIL_PAGE % box["error"].encode("utf-8", "replace"))
+                box["error"] = q.get("error_description", q["error"])[0][:300]
+                # the text comes from the query string of whoever opened this address: it is shown as text, never as markup
+                self._reply(400, _FAIL_PAGE % html.escape(box["error"]).encode("utf-8", "replace"))
                 return
             box["code"] = q.get("code", [""])[0]
             box["state"] = q.get("state", [""])[0]
             if box["code"]:
-                self._reply(200, _DONE_PAGE % provider.encode("utf-8"))
+                self._reply(200, _DONE_PAGE % html.escape(provider).encode("utf-8"))
             else:
                 box["error"] = "no authorization code in redirect"
                 self._reply(400, _FAIL_PAGE % b"No authorization code was returned.")
@@ -125,6 +128,9 @@ def _make_handler(path: str, box: Dict[str, str], provider: str):
         def _reply(self, status: int, body: bytes):
             self.send_response(status)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
 
@@ -135,8 +141,17 @@ def _make_handler(path: str, box: Dict[str, str], provider: str):
 
 
 def _parse_redirect(redirect_uri: str) -> Tuple[str, int, str]:
+    """Where to listen for the callback. Loopback only: the listener receives an authorization code, so a redirect address on any
+    other interface is refused instead of being bound."""
     u = urllib.parse.urlparse(redirect_uri or _DEFAULT_REDIRECT)
-    return (u.hostname or "127.0.0.1", u.port or 80, u.path or "/callback")
+    host = u.hostname or "127.0.0.1"
+    try:
+        loopback = host == "localhost" or ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = False
+    if u.scheme != "http" or not loopback:
+        raise OAuthError(f"the callback listener binds to a loopback http address only, not {redirect_uri!r}")
+    return (host, u.port or 80, u.path or "/callback")
 
 
 @dataclass

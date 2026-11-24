@@ -110,15 +110,22 @@ class OAuthFlow:
         if resp.status >= 400 or not data or data.get("error"):
             raise OAuthError(f"{self.config.provider} token exchange failed "
                              f"(status {resp.status}): {(data or {}).get('error', 'unknown')}")
+        if not isinstance(data.get("access_token"), str) or not data["access_token"]:
+            # a 200 without a token is not a grant: storing an empty credential would only fail later, somewhere less clear
+            raise OAuthError(f"{self.config.provider} token exchange returned no access token (status {resp.status})")
         base = now if now is not None else time.time()
         expires_in = data.get("expires_in")
+        try:
+            expires_in = float(expires_in) if expires_in else 0.0
+        except (TypeError, ValueError):
+            expires_in = 0.0
         scope = data.get("scope", "")
         scopes = tuple(scope.split()) if isinstance(scope, str) and scope else self.config.scopes
         return TokenGrant(
             access_token=str(data.get("access_token", "")),
             refresh_token=str(data.get("refresh_token", "")),
             scopes=scopes,
-            expires_at=(base + float(expires_in)) if expires_in else 0.0,
+            expires_at=(base + expires_in) if expires_in > 0 else 0.0,
             account_ref=str(data.get("team", {}).get("id", "") if isinstance(data.get("team"), dict)
                             else data.get("account_id", "")),
         )
