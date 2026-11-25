@@ -23,4 +23,15 @@ jobs:
       - name: Install (dev extra)
         run: python -m pip install -e ".[dev]"
       - name: Test
-        run: pytest -q
+        run: pytest -q --junitxml="$RUNNER_TEMP/connectors-tests.xml"
+      - name: Report the run to the QA portfolio dashboard
+        # the default branch only (the dashboard shows its state, not every pull request's); failures are reported too; a dashboard
+        # outage never fails the build, and with no token (a fork) nothing is reported
+        if: ${{ always() && github.event_name == 'push' }}
+        uses: redevops-io/agentic-os/.github/actions/report-qa@v0.4.12
+        with:
+          junit: ${{ runner.temp }}/connectors-tests.xml
+          project: connectors
+          suite: unit
+          url: ${{ vars.QA_DASHBOARD_URL }}
+          token: ${{ secrets.QA_DASHBOARD_TOKEN }}
